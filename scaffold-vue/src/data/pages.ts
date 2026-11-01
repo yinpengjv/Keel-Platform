@@ -21,6 +21,7 @@ export const REGISTERED_PAGES: RegisteredPage[] = [
   { key: 'system/post/index', label: '岗位管理', load: () => import('@/views/system/Posts.vue') },
   { key: 'system/dict/index', label: '字典管理', load: () => import('@/views/system/Dict.vue') },
   { key: 'system/config/index', label: '参数配置', load: () => import('@/views/system/Configs.vue') },
+  { key: 'system/swaggerdoc/index', label: '接口文档', load: () => import('@/views/system/SwaggerDoc.vue') },
   { key: 'monitor/operlog/index', label: '操作日志', load: () => import('@/views/monitor/OperLog.vue') },
   { key: 'monitor/loginlog/index', label: '登录日志', load: () => import('@/views/monitor/LoginLog.vue') },
   { key: 'monitor/runtimelog/index', label: '运行日志', load: () => import('@/views/monitor/RuntimeLog.vue') },

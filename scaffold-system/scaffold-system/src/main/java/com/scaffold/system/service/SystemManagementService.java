@@ -38,11 +38,18 @@ public class SystemManagementService {
     private final SystemManagementMapper mapper;
     private final PasswordEncoder passwordEncoder;
     private final SystemPermissionResolver permissionResolver;
+    private final com.scaffold.framework.security.TokenStore tokenStore;
+    private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 
-    public SystemManagementService(SystemManagementMapper mapper, PasswordEncoder passwordEncoder, SystemPermissionResolver permissionResolver) {
+    public SystemManagementService(SystemManagementMapper mapper, PasswordEncoder passwordEncoder,
+                                   SystemPermissionResolver permissionResolver,
+                                   com.scaffold.framework.security.TokenStore tokenStore,
+                                   org.springframework.context.ApplicationEventPublisher eventPublisher) {
         this.mapper = mapper;
         this.passwordEncoder = passwordEncoder;
         this.permissionResolver = permissionResolver;
+        this.tokenStore = tokenStore;
+        this.eventPublisher = eventPublisher;
     }
 
     /** 用户页所需的引用选项，避免为只读用户申请角色、岗位和参数管理权限。 */
@@ -77,7 +84,28 @@ public class SystemManagementService {
         Page page = pageOf(query);
         DataScopeCriteria scope = DataScopeContext.current();
         long total = mapper.countUsers(keyword, status, deptId, postId, scope);
-        return PageResult.of(mapper.selectUsers(keyword, status, deptId, postId, scope, page.offset(), page.pageSize()), total, page.pageNum(), page.pageSize());
+        List<Map<String, Object>> rows = mapper.selectUsers(keyword, status, deptId, postId, scope, page.offset(), page.pageSize());
+        // 在线标识：令牌量级小（几百以内），一次枚举分组后逐行比对
+        Set<String> onlineUsernames = tokenStore.tokensByUsername().keySet();
+        for (Map<String, Object> row : rows) {
+            row.put("online", onlineUsernames.contains(String.valueOf(row.get("username"))));
+        }
+        return PageResult.of(rows, total, page.pageNum(), page.pageSize());
+    }
+
+    /**
+     * 强制下线：撤销该用户当前全部令牌。
+     *
+     * @return 撤销的会话数；0 表示该用户本就不在线
+     */
+    @Transactional
+    public int kickUser(Long id) {
+        Map<String, Object> row = mapper.selectUserById(id);
+        if (row == null || Integer.parseInt(String.valueOf(row.get("deleted"))) == 1) {
+            throw new BusinessException("用户不存在");
+        }
+        String username = String.valueOf(row.get("username"));
+        return tokenStore.revokeAll(username);
     }
 
     @DataScope
@@ -668,6 +696,7 @@ public class SystemManagementService {
         row.put("builtin", boolAsInt(request.getBuiltin()));
         row.put("remark", request.getRemark());
         mapper.insertConfig(row, currentUsername());
+        eventPublisher.publishEvent(new ConfigChangedEvent(key));
         return new IdResponse(numberAsLong(row.get("id")));
     }
 
@@ -682,6 +711,8 @@ public class SystemManagementService {
         if (mapper.updateConfig(id, row, currentUsername()) == 0) {
             throw new BusinessException("参数配置不存在或为内置参数");
         }
+        // update/delete 只拿得到 id，发布全量失效（缓存重建只是一条主键查询，代价可忽略）
+        eventPublisher.publishEvent(new ConfigChangedEvent(null));
     }
 
     @Transactional
@@ -689,6 +720,7 @@ public class SystemManagementService {
         if (mapper.deleteConfig(id) == 0) {
             throw new BusinessException("参数配置不存在或为内置参数");
         }
+        eventPublisher.publishEvent(new ConfigChangedEvent(null));
     }
 
     private Page pageOf(PageQuery query) {

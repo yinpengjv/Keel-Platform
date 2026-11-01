@@ -109,6 +109,14 @@ public interface SystemManagementMapper {
     Map<String, Object> selectUserProfileByUsername(@Param("username") String username);
 
     @Select("""
+            SELECT u.id, u.username, u.nickname, u.status, u.deleted
+            FROM sys_user u
+            WHERE u.id = #{id}
+            LIMIT 1
+            """)
+    Map<String, Object> selectUserById(@Param("id") Long id);
+
+    @Select("""
             SELECT r.id, r.data_scope AS dataScope
             FROM sys_user_role ur
             JOIN sys_role r ON r.id = ur.role_id

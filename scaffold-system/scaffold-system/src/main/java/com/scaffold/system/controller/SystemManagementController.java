@@ -104,6 +104,14 @@ public class SystemManagementController {
         return R.success(null);
     }
 
+    /** 强制下线：撤销该用户当前全部令牌，返回撤销的会话数 */
+    @PostMapping("/users/{id}/kick")
+    @RequiresPermission("system:user:kick")
+    @OperLog(module = "用户管理", action = "强制下线")
+    public R<Integer> kickUser(@PathVariable Long id) {
+        return R.success(service.kickUser(id));
+    }
+
     @DeleteMapping("/users/{id}")
     @RequiresPermission("system:user:remove")
     @OperLog(module = "用户管理", action = "删除")

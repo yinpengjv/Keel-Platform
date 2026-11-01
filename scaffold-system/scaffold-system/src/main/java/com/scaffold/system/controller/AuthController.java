@@ -4,13 +4,16 @@ import com.scaffold.common.domain.R;
 import com.scaffold.common.exception.BusinessException;
 import com.scaffold.framework.audit.OperLog;
 import com.scaffold.framework.security.CaptchaService;
+import com.scaffold.framework.security.KeyValueStore;
 import com.scaffold.framework.security.LoginChallengeService;
+import com.scaffold.framework.security.RequiresPermission;
 import com.scaffold.system.domain.dto.ChangePasswordRequest;
 import com.scaffold.system.domain.dto.LoginRequest;
 import com.scaffold.system.domain.vo.CurrentUserResponse;
 import com.scaffold.system.domain.vo.LoginResponse;
 import com.scaffold.system.service.AuthService;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -19,6 +22,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.security.SecureRandom;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -29,11 +34,20 @@ public class AuthController {
     private final AuthService authService;
     private final CaptchaService captchaService;
     private final LoginChallengeService loginChallenge;
+    private final KeyValueStore keyValueStore;
 
-    public AuthController(AuthService authService, CaptchaService captchaService, LoginChallengeService loginChallenge) {
+    private static final SecureRandom RANDOM = new SecureRandom();
+    /** Swagger 一次性票据与回话 Cookie 的存储前缀 */
+    private static final String SWAGGER_TICKET_PREFIX = "swagger:ticket:";
+    private static final String SWAGGER_SESSION_PREFIX = "swagger:session:";
+    private static final String SWAGGER_COOKIE = "SWAGGER_TICKET";
+
+    public AuthController(AuthService authService, CaptchaService captchaService, LoginChallengeService loginChallenge,
+                          KeyValueStore keyValueStore) {
         this.authService = authService;
         this.captchaService = captchaService;
         this.loginChallenge = loginChallenge;
+        this.keyValueStore = keyValueStore;
     }
 
     @GetMapping("/captcha")
@@ -50,16 +64,40 @@ public class AuthController {
         return R.success(result);
     }
 
+    /**
+     * 签发 Swagger 访问票据：一次性、60 秒有效。
+     * 浏览器带着票据打开 /swagger-ui/index.html?ticket=…，SwaggerAccessFilter
+     * 校验通过后下发短时会话 Cookie，后续页面与 api-docs 请求都凭 Cookie 通过。
+     */
+    @GetMapping("/swagger-ticket")
+    @RequiresPermission("system:swagger:view")
+    public R<Map<String, Object>> swaggerTicket() {
+        byte[] raw = new byte[16];
+        RANDOM.nextBytes(raw);
+        String ticket = HexFormat.of().formatHex(raw);
+        keyValueStore.set(SWAGGER_TICKET_PREFIX + ticket, "1", 60);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("ticket", ticket);
+        result.put("url", "/swagger-ui/index.html?ticket=" + ticket);
+        return R.success(result);
+    }
+
     @PostMapping("/login")
     public R<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
         String username = request.getUsername().trim();
+        // 锁定检查优先于一切：失败次数达到阈值（参数 sys.security.maxLoginFailures）后直接拒绝
+        loginChallenge.lockRemainingSeconds(username).ifPresent(remaining ->
+                throwLocked(remaining));
         // 只有上次登录失败后的窗口期内才校验验证码；其余情况忽略验证码字段，首次登录直接放行
         if (loginChallenge.isRequired(username)) {
             String captcha = request.getCaptcha();
             if (captcha == null || captcha.isBlank()) {
+                // 验证码缺失同样计入失败次数，否则窗口期内提交空验证码永远不触发锁定
+                throwIfLocked(loginChallenge.recordFailure(username));
                 throw new BusinessException("请输入验证码");
             }
             if (!captchaService.verify(request.getCaptchaUuid(), captcha)) {
+                throwIfLocked(loginChallenge.recordFailure(username));
                 throw new BusinessException("验证码错误或已过期");
             }
         }
@@ -68,10 +106,22 @@ public class AuthController {
             loginChallenge.clear(username);
             return R.success(response);
         } catch (BusinessException exception) {
-            // 账号密码错误、账号停用等：开启（或顺延）验证码窗口
-            loginChallenge.markFailure(username);
+            // 账号密码错误、账号停用等：开启（或顺延）验证码窗口，并累计失败计数
+            throwIfLocked(loginChallenge.recordFailure(username));
             throw exception;
         }
+    }
+
+    /** 刚好达到阈值时立即改报锁定提示，覆盖本应抛出的原始错误 */
+    private void throwIfLocked(boolean locked) {
+        if (locked) {
+            throw new BusinessException("登录失败次数过多，账号已锁定 " + loginChallenge.lockMinutes() + " 分钟");
+        }
+    }
+
+    private void throwLocked(long remainingSeconds) {
+        long minutes = Math.max(1, remainingSeconds / 60);
+        throw new BusinessException("登录失败次数过多，账号已锁定，请 " + minutes + " 分钟后再试");
     }
 
     @PostMapping("/logout")

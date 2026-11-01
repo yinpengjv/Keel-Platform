@@ -34,14 +34,22 @@ public class JdbcRuntimeLogSink implements RuntimeLogSink {
     private static final int PURGE_INTERVAL = 2000;
 
     private final JdbcTemplate jdbcTemplate;
-    private final int retainDays;
+    private final int retainDaysDefault;
+    private final com.scaffold.framework.config.DynamicConfig dynamicConfig;
     private final AtomicLong written = new AtomicLong();
     private final AtomicLong failed = new AtomicLong();
 
     public JdbcRuntimeLogSink(JdbcTemplate jdbcTemplate,
-                              @Value("${scaffold.log.runtime.retain-days:7}") int retainDays) {
+                              @Value("${scaffold.log.runtime.retain-days:7}") int retainDays,
+                              com.scaffold.framework.config.DynamicConfig dynamicConfig) {
         this.jdbcTemplate = jdbcTemplate;
-        this.retainDays = retainDays;
+        this.retainDaysDefault = retainDays;
+        this.dynamicConfig = dynamicConfig;
+    }
+
+    /** 保留天数，运行期可调：参数 sys.log.runtimeRetainDays，未配置回落启动值 */
+    public int retainDays() {
+        return dynamicConfig.intOf("sys.log.runtimeRetainDays", retainDaysDefault);
     }
 
     @Override
@@ -63,7 +71,7 @@ public class JdbcRuntimeLogSink implements RuntimeLogSink {
                 ps.setString(10, entry.message());
                 ps.setString(11, entry.detail());
             });
-            if (retainDays > 0 && written.addAndGet(entries.size()) >= PURGE_INTERVAL) {
+            if (retainDays() > 0 && written.addAndGet(entries.size()) >= PURGE_INTERVAL) {
                 written.set(0);
                 purgeExpired();
             }
@@ -78,17 +86,17 @@ public class JdbcRuntimeLogSink implements RuntimeLogSink {
         return failed.get();
     }
 
-    /** 按保留天数删过期日志；retain-days <= 0 表示永久保留，由调用方判断 */
+    /** 按保留天数删过期日志；保留天数 <= 0 表示永久保留，由调用方判断 */
     public int purgeExpired() {
+        int days = retainDays();
+        if (days <= 0) {
+            return 0;
+        }
         try {
-            return jdbcTemplate.update(PURGE_SQL, retainDays);
+            return jdbcTemplate.update(PURGE_SQL, days);
         } catch (RuntimeException e) {
             return 0;
         }
-    }
-
-    public int retainDays() {
-        return retainDays;
     }
 
     private void setInt(java.sql.PreparedStatement ps, int index, Integer value) throws java.sql.SQLException {

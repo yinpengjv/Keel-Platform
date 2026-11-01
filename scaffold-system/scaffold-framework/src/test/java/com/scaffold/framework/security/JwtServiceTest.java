@@ -1,5 +1,6 @@
 package com.scaffold.framework.security;
 
+import com.scaffold.framework.config.DynamicConfig;
 import org.junit.jupiter.api.Test;
 
 import java.security.SecureRandom;
@@ -10,10 +11,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class JwtServiceTest {
 
+    /** 无 DynamicConfigProvider 的实例：所有参数走启动默认值 */
+    private static DynamicConfig config() {
+        return new DynamicConfig(null);
+    }
+
     @Test
     void rejectsMissingBlankAndShortSecretsAtConstruction() {
         for (String secret : new String[]{null, "", " ".repeat(32), randomSecret().substring(1)}) {
-            assertThatThrownBy(() -> new JwtService(secret, 7200))
+            assertThatThrownBy(() -> new JwtService(secret, 7200, config()))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("JWT_SECRET");
         }
@@ -21,7 +27,7 @@ class JwtServiceTest {
 
     @Test
     void signsAndVerifiesTokensWithAMinimumLengthSecret() {
-        JwtService service = new JwtService(randomSecret(), 7200);
+        JwtService service = new JwtService(randomSecret(), 7200, config());
 
         String token = service.generateToken(1L, "admin");
 
@@ -31,17 +37,17 @@ class JwtServiceTest {
 
     @Test
     void measuresSecretLengthInUtf8Bytes() {
-        assertThatThrownBy(() -> new JwtService("密".repeat(10), 7200))
+        assertThatThrownBy(() -> new JwtService("密".repeat(10), 7200, config()))
                 .isInstanceOf(IllegalArgumentException.class);
-        JwtService service = new JwtService("密".repeat(11), 7200);
+        JwtService service = new JwtService("密".repeat(11), 7200, config());
 
         assertThat(service.parseUsername(service.generateToken(1L, "admin"))).isEqualTo("admin");
     }
 
     @Test
     void rejectsTokensSignedWithAnotherSecret() {
-        JwtService signer = new JwtService(randomSecret(), 7200);
-        JwtService verifier = new JwtService(randomSecret(), 7200);
+        JwtService signer = new JwtService(randomSecret(), 7200, config());
+        JwtService verifier = new JwtService(randomSecret(), 7200, config());
 
         assertThat(verifier.parseUsername(signer.generateToken(1L, "admin"))).isNull();
     }

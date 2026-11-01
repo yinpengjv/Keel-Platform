@@ -63,6 +63,18 @@ public class InMemoryKeyValueStore implements KeyValueStore {
         }
     }
 
+    @Override
+    public java.util.Set<String> keys(String prefix) {
+        String match = prefix == null ? "" : prefix;
+        java.util.Set<String> result = new java.util.HashSet<>();
+        entries.forEach((key, entry) -> {
+            if (!entry.isExpired() && key.startsWith(match)) {
+                result.add(key);
+            }
+        });
+        return result;
+    }
+
     private void sweepExpired() {
         long now = System.currentTimeMillis();
         entries.entrySet().removeIf(item -> item.getValue().expireAt() <= now);

@@ -1,5 +1,6 @@
 package com.scaffold.framework.security;
 
+import com.scaffold.framework.config.DynamicConfig;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -19,17 +20,20 @@ public class JwtService {
 
     private static final Logger log = LoggerFactory.getLogger(JwtService.class);
     private final String secret;
-    private final long expiresSeconds;
+    private final long expiresSecondsDefault;
+    private final DynamicConfig dynamicConfig;
 
     public JwtService(
             @Value("${scaffold.jwt.secret}") String secret,
-            @Value("${scaffold.jwt.expires-seconds}") long expiresSeconds
+            @Value("${scaffold.jwt.expires-seconds}") long expiresSeconds,
+            DynamicConfig dynamicConfig
     ) {
         if (secret == null || secret.isBlank() || secret.getBytes(StandardCharsets.UTF_8).length < 32) {
             throw new IllegalArgumentException("JWT_SECRET 必须配置为至少 32 字节的非空白密钥");
         }
         this.secret = secret;
-        this.expiresSeconds = expiresSeconds;
+        this.expiresSecondsDefault = expiresSeconds;
+        this.dynamicConfig = dynamicConfig;
     }
 
     public String generateToken(Long userId, String username) {
@@ -39,7 +43,7 @@ public class JwtService {
                 .subject(username)
                 .claim("userId", userId)
                 .issuedAt(Date.from(now))
-                .expiration(Date.from(now.plusSeconds(expiresSeconds)))
+                .expiration(Date.from(now.plusSeconds(expiresSeconds())))
                 .signWith(secretKey())
                 .compact();
     }
@@ -58,8 +62,12 @@ public class JwtService {
         }
     }
 
+    /**
+     * 令牌有效期（秒）。运行期可调：参数 {@code sys.security.jwtExpiresSeconds}，
+     * 未配置时回落启动值；改后只对新签发的令牌生效，存量令牌不受影响。
+     */
     public long expiresSeconds() {
-        return expiresSeconds;
+        return dynamicConfig.longOf("sys.security.jwtExpiresSeconds", expiresSecondsDefault);
     }
 
     private SecretKey secretKey() {

@@ -1,5 +1,6 @@
 package com.scaffold.framework.filter;
 
+import com.scaffold.framework.config.DynamicConfig;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -56,13 +57,21 @@ public class RequestAccessLogFilter extends OncePerRequestFilter {
     };
 
     private final boolean enabled;
-    private final long slowMillis;
+    private final long slowMillisDefault;
+    private final DynamicConfig dynamicConfig;
 
     public RequestAccessLogFilter(
             @Value("${scaffold.log.access.enabled:true}") boolean enabled,
-            @Value("${scaffold.log.access.slow-ms:1000}") long slowMillis) {
+            @Value("${scaffold.log.access.slow-ms:1000}") long slowMillis,
+            DynamicConfig dynamicConfig) {
         this.enabled = enabled;
-        this.slowMillis = slowMillis;
+        this.slowMillisDefault = slowMillis;
+        this.dynamicConfig = dynamicConfig;
+    }
+
+    /** 慢请求阈值（毫秒），运行期可调：参数 sys.log.accessSlowMs，未配置回落启动值 */
+    private long slowMillis() {
+        return dynamicConfig.longOf("sys.log.accessSlowMs", slowMillisDefault);
     }
 
     @Override
@@ -97,7 +106,7 @@ public class RequestAccessLogFilter extends OncePerRequestFilter {
             try {
                 if (response.getStatus() >= 500) {
                     log.error(message);
-                } else if (costMillis >= slowMillis) {
+                } else if (costMillis >= slowMillis()) {
                     log.warn(message + " [慢请求]");
                 } else {
                     log.info(message);

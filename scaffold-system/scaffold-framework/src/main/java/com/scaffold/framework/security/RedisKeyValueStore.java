@@ -33,4 +33,12 @@ public class RedisKeyValueStore implements KeyValueStore {
     public void delete(String key) {
         redisTemplate.delete(key);
     }
+
+    @Override
+    public java.util.Set<String> keys(String prefix) {
+        String pattern = (prefix == null ? "" : prefix) + "*";
+        // 令牌量级小（几百以内），直接 KEYS 可接受；规模上来后应换 SCAN 游标遍历
+        java.util.Set<String> found = redisTemplate.keys(pattern);
+        return found == null ? java.util.Set.of() : found;
+    }
 }

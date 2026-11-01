@@ -36,9 +36,10 @@ const columns: Column[] = [
   { key: 'postName', title: '岗位' },
   { key: 'roleName', title: '角色' },
   { key: 'phone', title: '手机号' },
+  { key: 'online', title: '在线', width: 76 },
   { key: 'status', title: '状态', width: 96 },
   { key: 'createTime', title: '创建时间', width: 150 },
-  { key: 'actions', title: '操作', width: 150, className: 'col-actions' },
+  { key: 'actions', title: '操作', width: 176, className: 'col-actions' },
 ]
 
 /* ── 看板视图：按部门 / 角色 / 状态分列；只有「按状态」允许拖动（改状态是单字段接口） ── */
@@ -266,6 +267,23 @@ async function remove(row: UserRow) {
   }
 }
 
+async function kick(row: UserRow) {
+  const ok = await confirm({
+    title: '强制下线',
+    message: `确认让「${row.nickname}」强制下线吗？其当前所有登录会话将立即失效。`,
+    confirmText: '强制下线',
+    danger: true,
+  })
+  if (!ok) return
+  try {
+    const revoked = await systemApi.users.kick(row.id)
+    pushToast(revoked > 0 ? `已下线「${row.nickname}」（${revoked} 个会话）` : '该用户没有活跃会话')
+    await list.load()
+  } catch (error) {
+    toastError(error, '强制下线失败')
+  }
+}
+
 async function batchStatus(ids: (string | number)[], status: 0 | 1) {
   try {
     await Promise.all(ids.map(id => systemApi.users.updateStatus(Number(id), status)))
@@ -406,12 +424,17 @@ async function batchRemove(ids: (string | number)[]) {
     <template #cell-roleName="{ row }"><Tag v-if="row.roleName" tone="info">{{ row.roleName }}</Tag><span v-else class="faint">未分配</span></template>
     <template #cell-phone="{ row }"><span class="tnum muted">{{ row.phone || '—' }}</span></template>
     <template #cell-status="{ row }"><StatusTag :status="row.status" /></template>
+    <template #cell-online="{ row }">
+      <Tag v-if="row.online" tone="success">在线</Tag>
+      <span v-else class="faint">离线</span>
+    </template>
     <template #cell-createTime="{ row }"><span class="tnum soft">{{ row.createTime }}</span></template>
     <template #cell-actions="{ row }">
       <div class="row-actions">
         <PermissionButton perm="system:user:edit" icon-only icon="edit" label="编辑" @click="openEdit(row)" />
         <PermissionButton v-if="tracePath" perm="system:role:list" icon-only icon="shield" label="权限溯源" @click="openTrace(row)" />
         <PermissionButton perm="system:user:resetPwd" icon-only icon="key" label="重置密码" @click="openReset(row)" />
+        <PermissionButton v-if="row.online" perm="system:user:kick" icon-only icon="logout" label="强制下线" danger @click="kick(row)" />
         <PermissionButton perm="system:user:remove" icon-only icon="trash" label="删除" danger @click="remove(row)" />
       </div>
     </template>

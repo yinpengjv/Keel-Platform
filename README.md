@@ -51,7 +51,7 @@
 
 ### 登录验证码策略
 
-首次登录**不需要**验证码。密码输错一次后，该账号在 10 分钟窗口内的登录必须带验证码；登录成功或窗口到期即自动解除。窗口长度由 `SCAFFOLD_LOGIN_CAPTCHA_WINDOW` 控制。这样正常用户几乎不会被打扰，暴力破解仍然受限。
+首次登录**不需要**验证码。密码输错一次后，该账号在 10 分钟窗口内的登录必须带验证码；登录成功或窗口到期即自动解除。连续失败达到阈值（默认 5 次）账号会被锁定 15 分钟，阈值与时长均可在参数配置里调整。窗口长度由 `SCAFFOLD_LOGIN_CAPTCHA_WINDOW` 控制，页面改参数即时生效。
 
 ### 密码输入
 
@@ -210,7 +210,7 @@ docker run -d --name keel -p 8080:8080 \
 
 ---
 
-## 七、环境变量
+## 七、环境变量与运行期参数
 
 后端只读进程环境变量，不加载 `.env` 文件。
 
@@ -223,18 +223,37 @@ docker run -d --name keel -p 8080:8080 \
 | `DB_TIMEZONE` | 连接与会话时区 | `+08:00` |
 | `SCAFFOLD_CACHE` | `local` 进程内存 / `redis` 走 Redis | `local` |
 | `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | 仅 `SCAFFOLD_CACHE=redis` 时生效 | `localhost` / `6379` / 空 |
-| `SCAFFOLD_LOGIN_CAPTCHA_WINDOW` | 登录失败后强制验证码的窗口（秒） | `600` |
+| `SCAFFOLD_LOGIN_CAPTCHA_WINDOW` | 登录失败后强制验证码的窗口（秒），**可被参数覆盖** | `600` |
 | `ACCESS_LOG_ENABLED` | 每个请求一行访问日志 | `true` |
-| `ACCESS_LOG_SLOW_MS` | 超过该耗时记 warn 并标 `[慢请求]` | `1000` |
+| `ACCESS_LOG_SLOW_MS` | 慢请求阈值（毫秒），**可被参数覆盖** | `1000` |
 | `SQL_LOG_LEVEL` | mapper 日志级别，`debug` 打印 SQL 与参数 | `debug` |
 | `RUNTIME_LOG_ENABLED` | 运行日志入库开关 | `true` |
 | `RUNTIME_LOG_CAPTURE_SQL` | 是否把 SQL 与参数也收进运行日志 | `false` |
-| `RUNTIME_LOG_RETAIN_DAYS` | 运行日志保留天数，`0` 永久保留 | `7` |
+| `RUNTIME_LOG_RETAIN_DAYS` | 运行日志保留天数，`0` 永久保留，**可被参数覆盖** | `7` |
 | `RUNTIME_LOG_QUEUE_CAPACITY` | 运行日志写入队列容量，满了丢弃不阻塞业务 | `2000` |
+| `SCAFFOLD_SECURITY_MAX_LOGIN_FAILURES` | 登录失败锁定阈值（次），0 关闭，**可被参数覆盖** | `5` |
+| `SCAFFOLD_SECURITY_LOCK_MINUTES` | 登录锁定时长（分钟），**可被参数覆盖** | `15` |
 | `APP_STATIC_DIR` | 前端静态目录，设置后由后端托管（镜像内为 `/app/static`） | 空（关闭） |
 | `VITE_API_PROXY_TARGET` | 前端开发代理目标（仅前端） | `http://localhost:8080` |
 
 密钥务必在多次重启间保持一致，否则旧 token 全部失效。
+
+**运行期参数（优先于环境变量）**：以下参数已放进「系统管理 → 参数配置」，页面上改完立即生效，无需重启；删除参数则回落到环境变量默认值：
+
+| 参数键 | 含义 | 默认 |
+| --- | --- | --- |
+| `sys.login.captchaWindowSeconds` | 登录失败后强制验证码的窗口（秒） | `600` |
+| `sys.log.accessSlowMs` | 慢请求阈值（毫秒） | `1000` |
+| `sys.log.runtimeRetainDays` | 运行日志保留天数 | `7` |
+| `sys.security.jwtExpiresSeconds` | 令牌有效期（秒），只对新登录生效 | `7200` |
+| `sys.security.maxLoginFailures` | 登录失败锁定阈值（次），`0` 关闭锁定 | `5` |
+| `sys.security.lockMinutes` | 登录锁定时长（分钟） | `15` |
+
+**登录失败锁定**：同一账号连续登录失败（含验证码缺失/错误）达到阈值即锁定，期间登录直接拒绝并提示剩余时间；成功登录清零计数。锁定状态在 KV 存储中（`SCAFFOLD_CACHE=local` 时重启即解锁）。
+
+**在线用户与强制下线**：用户管理列表带「在线」标识（有有效令牌即在线）；行内「强制下线」按钮（权限 `system:user:kick`）撤销该用户全部会话，操作写入操作日志。
+
+**接口文档**：「系统管理 → 接口文档」（权限 `system:swagger:view`），Knife4j `/doc.html` 与原生 `/swagger-ui`。页面进入时自动换取一次性票据（60 秒有效、用后即焚），SwaggerAccessFilter 校验票据换会话 Cookie——直接访问文档地址会得到 403。`SWAGGER_ENABLED=false` 可整体关闭文档生成。
 
 ---
 

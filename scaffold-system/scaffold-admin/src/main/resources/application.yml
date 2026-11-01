@@ -31,6 +31,14 @@ scaffold:
       batch-size: 100
       flush-millis: 500
 
+springdoc:
+  # 接口文档总开关（Knife4j /doc.html 与原生 /swagger-ui）；
+  # 访问受 system:swagger:view 权限控制（SwaggerAccessFilter），这里只是能否生成文档
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:true}
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:true}
+
 logging:
   pattern:
     # 与 TraceIdFilter 配合：同一请求的访问日志、SQL 日志共用 traceId，可直接 grep 串联

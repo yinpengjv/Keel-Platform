@@ -21,6 +21,7 @@ export interface UserRow {
   postName: string
   roleName: string
   status: number
+  online?: boolean
   createTime: string
   lastLogin: string
 }
@@ -220,6 +221,8 @@ export function createSystemApi(client: HttpClient) {
       export: (query?: QueryParams) => client.download('/system/users/export', query),
       updateStatus: (id: number, status: number) => client.put<void>(`/system/users/${id}/status`, { status }),
       resetPassword: (id: number, password: string) => client.put<void>(`/system/users/${id}/password`, { password }),
+      kick: (id: number) => client.post<number>(`/system/users/${id}/kick`),
+      swaggerTicket: () => client.get<{ ticket: string; url: string }>('/auth/swagger-ticket'),
     },
     roles: {
       ...crudPage<Record<string, unknown>, RoleWriteRequest>(client, '/system/roles'),
