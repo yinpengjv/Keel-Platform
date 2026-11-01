@@ -3,6 +3,7 @@ package com.scaffold.system.controller;
 import com.scaffold.common.domain.PageQuery;
 import com.scaffold.common.domain.PageResult;
 import com.scaffold.common.domain.R;
+import com.scaffold.framework.audit.OperLog;
 import com.scaffold.framework.security.RequiresPermission;
 import com.scaffold.system.service.RuntimeLogService;
 import org.springframework.http.HttpHeaders;
@@ -73,6 +74,7 @@ public class RuntimeLogController {
     /** 清理 N 天前的日志；0 表示全部清空。路径里带天数是因为前端的 delete 不支持 query */
     @DeleteMapping("/before/{days}")
     @RequiresPermission("monitor:runtime:remove")
+    @OperLog(module = "运行日志", action = "清理过期日志")
     public R<Integer> cleanup(@PathVariable Integer days) {
         return R.success(service.cleanup(days == null ? 7 : days));
     }
@@ -86,6 +88,7 @@ public class RuntimeLogController {
 
     @DeleteMapping
     @RequiresPermission("monitor:runtime:remove")
+    @OperLog(module = "运行日志", action = "清空")
     public R<Void> clear() {
         service.clear();
         return R.success(null);

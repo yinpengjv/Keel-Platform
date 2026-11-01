@@ -4,8 +4,15 @@ import com.scaffold.common.domain.PageQuery;
 import com.scaffold.common.domain.PageResult;
 import com.scaffold.common.exception.BusinessException;
 import com.scaffold.framework.runtime.RuntimeLogAppenderRegistrar;
+import com.scaffold.framework.runtime.RuntimeLogEntry;
 import com.scaffold.system.mapper.RuntimeLogMapper;
+import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.MDC;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -105,12 +112,68 @@ public class RuntimeLogService {
         mapper.clearRuntimeLogs();
     }
 
-    /** 手动清理 N 天前的日志；0 表示全部清空 */
+    /**
+     * 手动清理 N 天前的日志；0 表示全部清空。
+     *
+     * <p>清理本身必须留痕：这是会删数据的动作，事后要能回答「谁在什么时候删了多少」。
+     * 记录写在清理之后，所以不会被这次清理带走（清空时表里会剩下这一条）。
+     */
     public int cleanup(int days) {
-        if (days <= 0) {
-            return mapper.clearRuntimeLogs();
+        int removed = days <= 0 ? mapper.clearRuntimeLogs() : mapper.deleteRuntimeLogsBefore(days);
+        audit(days <= 0
+                ? "清空运行日志，共删除 %d 条".formatted(removed)
+                : "清理运行日志：删除 %d 天前共 %d 条".formatted(days, removed));
+        return removed;
+    }
+
+    /**
+     * 写一条「运维动作」记录到运行日志。
+     *
+     * <p>走 {@link JdbcRuntimeLogSink} 直插，不经过 MyBatis，否则这条 INSERT 会被采集器再收一次；
+     * 请求本身（/api/monitor/runtime-logs/**）已被 appender 的路径过滤排除。
+     */
+    private void audit(String message) {
+        HttpServletRequest request = currentRequest();
+        sink.write(List.of(new RuntimeLogEntry(
+                "INFO",
+                "scaffold.audit",
+                MDC.get("traceId"),
+                request == null ? null : request.getMethod(),
+                request == null ? null : request.getRequestURI(),
+                200,
+                null,
+                currentUsername(),
+                clientIp(request),
+                message,
+                null
+        )));
+    }
+
+    private HttpServletRequest currentRequest() {
+        if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attributes) {
+            return attributes.getRequest();
         }
-        return mapper.deleteRuntimeLogsBefore(days);
+        return null;
+    }
+
+    private String currentUsername() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication == null ? null : String.valueOf(authentication.getPrincipal());
+    }
+
+    private String clientIp(HttpServletRequest request) {
+        if (request == null) {
+            return null;
+        }
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded != null && !forwarded.isBlank()) {
+            return forwarded.split(",")[0].trim();
+        }
+        String realIp = request.getHeader("X-Real-IP");
+        if (realIp != null && !realIp.isBlank()) {
+            return realIp;
+        }
+        return request.getRemoteAddr();
     }
 
     /** range → 小时数；all 或未知值表示不限时间 */

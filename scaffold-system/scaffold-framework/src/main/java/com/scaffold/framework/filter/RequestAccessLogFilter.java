@@ -44,7 +44,11 @@ public class RequestAccessLogFilter extends OncePerRequestFilter {
     private static final String FIELD_USER = "req.user";
     private static final String FIELD_IP = "req.ip";
 
-    private static final String[] SKIP_PREFIXES = {"/assets/", "/api/health"};
+    /**
+     * 不记录的路径：静态资源目录、健康检查，以及浏览器自动探测的 {@code /.well-known/**}
+     * （Chrome/Edge 的 DevTools 会周期性打这个口子，不去掉会在日志里刷一片 404）。
+     */
+    private static final String[] SKIP_PREFIXES = {"/assets/", "/api/health", "/.well-known/"};
 
     private static final String[] SKIP_SUFFIXES = {
             ".js", ".css", ".map", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".webp",
