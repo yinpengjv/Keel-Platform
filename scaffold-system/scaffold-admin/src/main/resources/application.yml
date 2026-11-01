@@ -18,6 +18,18 @@ scaffold:
       enabled: ${ACCESS_LOG_ENABLED:true}
       # 超过该毫秒数记 warn，便于从容器日志里挑出慢接口
       slow-ms: ${ACCESS_LOG_SLOW_MS:1000}
+    runtime:
+      # 运行日志采集（落 sys_runtime_log）；关闭后控制台日志照旧，只是不入库
+      enabled: ${RUNTIME_LOG_ENABLED:true}
+      # 是否把 SQL 与参数也收进运行日志；开启时自动把下面两个 mapper logger 调到 debug
+      capture-sql: ${RUNTIME_LOG_CAPTURE_SQL:false}
+      sql-loggers: com.scaffold.system.mapper,com.scaffold.generator.mapper
+      # 保留天数，过期数据在写入过程中顺带清理；0 表示永久保留
+      retain-days: ${RUNTIME_LOG_RETAIN_DAYS:7}
+      # 有界队列：满了就丢弃并计数，绝不阻塞业务线程
+      queue-capacity: ${RUNTIME_LOG_QUEUE_CAPACITY:2000}
+      batch-size: 100
+      flush-millis: 500
 
 logging:
   pattern:

@@ -146,6 +146,37 @@ export interface LoginLogStats {
   series: StatsBucket[]
 }
 
+/** 运行日志行：detail 只在详情接口返回，列表为空 */
+export interface RuntimeLogRow {
+  id: number
+  level: string
+  logger: string | null
+  traceId: string | null
+  requestMethod: string | null
+  requestUrl: string | null
+  httpStatus: number | null
+  cost: number | null
+  username: string | null
+  ip: string | null
+  message: string | null
+  detail?: string | null
+  createTime: string
+}
+
+/** 运行日志概览：capturing 采集是否生效、captureSql 是否收 SQL、dropped 队列满丢弃数、failedBatches 写库失败批次 */
+export interface RuntimeLogStats {
+  total: number
+  levels: Array<{ level: string; total: number }>
+  errors: number
+  slow: number
+  topSlow: Array<{ url: string; total: number; avgCost: number; maxCost: number }>
+  capturing: boolean
+  captureSql: boolean
+  dropped: number
+  failedBatches: number
+  retainDays: number
+}
+
 /** 泳道时间块：startSec / endSec 当日秒数，count 次数，failed 失败数，maxCost 最大耗时 ms，ids 日志 ID（最多 50 个） */
 export interface TimelineBlock {
   startSec: number
@@ -246,6 +277,15 @@ export function createSystemApi(client: HttpClient) {
       export: (query?: QueryParams) => client.download('/monitor/login-logs/export', query),
       remove: (id: number | string) => client.delete<void>(`/monitor/login-logs/${id}`),
       clear: () => client.delete<void>('/monitor/login-logs'),
+    },
+    runtimeLogs: {
+      list: (query?: QueryParams) => client.get<PageResult<RuntimeLogRow>>('/monitor/runtime-logs', query),
+      stats: (range: StatsRange = '24h') => client.get<RuntimeLogStats>('/monitor/runtime-logs/stats', { range }),
+      detail: (id: number | string) => client.get<RuntimeLogRow>(`/monitor/runtime-logs/${id}`),
+      export: (query?: QueryParams) => client.download('/monitor/runtime-logs/export', query),
+      remove: (id: number | string) => client.delete<void>(`/monitor/runtime-logs/${id}`),
+      clear: () => client.delete<void>('/monitor/runtime-logs'),
+      cleanup: (days: number) => client.delete<number>(`/monitor/runtime-logs/before/${days}`),
     },
   }
 }

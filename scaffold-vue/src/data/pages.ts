@@ -23,6 +23,7 @@ export const REGISTERED_PAGES: RegisteredPage[] = [
   { key: 'system/config/index', label: '参数配置', load: () => import('@/views/system/Configs.vue') },
   { key: 'monitor/operlog/index', label: '操作日志', load: () => import('@/views/monitor/OperLog.vue') },
   { key: 'monitor/loginlog/index', label: '登录日志', load: () => import('@/views/monitor/LoginLog.vue') },
+  { key: 'monitor/runtimelog/index', label: '运行日志', load: () => import('@/views/monitor/RuntimeLog.vue') },
   { key: 'tool/gen/index', label: '代码生成', load: () => import('@/views/tool/Generator.vue') },
 ]
 

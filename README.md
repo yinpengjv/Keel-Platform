@@ -31,6 +31,7 @@
 | 组织与岗位 | 部门树（含上级链）、岗位、用户多岗位关联，另有组织画布可视化 |
 | 字典与参数 | 字典类型/数据两级维护，前端 `DictSelect` 直接消费；系统参数支持内置保护 |
 | 审计日志 | 登录日志、操作日志双轨，含趋势、泳道、热力图、异常筛选、导出与清理，请求参数脱敏 |
+| 运行日志 | 请求访问、慢请求、异常堆栈、SQL 与参数统一入库，按 traceId 串起同一次请求，可筛选、导出、按天清理 |
 | 代码生成 | 导入数据库表 → 配置 → 字段映射 → 预览/下载，产出**可直接运行**的前后端 CRUD 与幂等菜单 SQL |
 | 可观测 | 每个请求一行访问日志（含状态码、耗时、登录用户），SQL 与参数可开，靠 traceId 把一次请求串起来 |
 | 部署形态 | 本机前后端分离，或前端打进后端 jar 的**单镜像单端口**部署 |
@@ -74,6 +75,7 @@
 | 参数设置 | `/system/config` | 设置面板 / 表格 |
 | 操作日志 | `/monitor/oper-log` | 概览 + 趋势/泳道 + 明细横带，抽屉级联 |
 | 登录日志 | `/monitor/login-log` | 概览 + 趋势/热力 + 异常 + 明细 |
+| 运行日志 | `/monitor/runtime-log` | 概览卡 + 级别/链路筛选 + 明细抽屉（堆栈与 SQL 全文） |
 | 代码生成 | `/tool/generator` | 三步流水线抽屉 |
 
 外加无权限、页面不存在、组件未注册三个兜底页。
@@ -225,6 +227,10 @@ docker run -d --name keel -p 8080:8080 \
 | `ACCESS_LOG_ENABLED` | 每个请求一行访问日志 | `true` |
 | `ACCESS_LOG_SLOW_MS` | 超过该耗时记 warn 并标 `[慢请求]` | `1000` |
 | `SQL_LOG_LEVEL` | mapper 日志级别，`debug` 打印 SQL 与参数 | `debug` |
+| `RUNTIME_LOG_ENABLED` | 运行日志入库开关 | `true` |
+| `RUNTIME_LOG_CAPTURE_SQL` | 是否把 SQL 与参数也收进运行日志 | `false` |
+| `RUNTIME_LOG_RETAIN_DAYS` | 运行日志保留天数，`0` 永久保留 | `7` |
+| `RUNTIME_LOG_QUEUE_CAPACITY` | 运行日志写入队列容量，满了丢弃不阻塞业务 | `2000` |
 | `APP_STATIC_DIR` | 前端静态目录，设置后由后端托管（镜像内为 `/app/static`） | 空（关闭） |
 | `VITE_API_PROXY_TARGET` | 前端开发代理目标（仅前端） | `http://localhost:8080` |
 
@@ -318,7 +324,8 @@ npm run build
 | [docs/frontend-backend-integration.md](docs/frontend-backend-integration.md) | 前后端接口与数据格式约定 |
 | [docs/admin-redesign-architecture.md](docs/admin-redesign-architecture.md) | 前端组件与视图架构 |
 | [docs/run-windows-linux.md](docs/run-windows-linux.md) | Windows / Linux 逐步运行、Nginx 反代、排错 |
-| [docs/docker-image.md](docs/docker-image.md) | 单镜像构建、运行、升级与备份 |
+| [docs/docker-image.md](docs/docker-image.md) | 单镜像构建、运行、看日志、升级与备份 |
+| [docs/runtime-log.md](docs/runtime-log.md) | 运行日志：采集范围、开关、接口、容量与自激防护 |
 | [changelog.md](changelog.md) | 变更记录 |
 
 ---

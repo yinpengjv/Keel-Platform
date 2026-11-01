@@ -50,6 +50,9 @@ docker run -d --name keel --restart unless-stopped \
 | `ACCESS_LOG_ENABLED` | 否 | 默认 `true`，每个请求一行访问日志；设 `false` 关闭 |
 | `ACCESS_LOG_SLOW_MS` | 否 | 默认 `1000`，超过该耗时的请求记 warn 并标 `[慢请求]` |
 | `SQL_LOG_LEVEL` | 否 | 默认 `debug`，打印每条 SQL 与参数；设 `info` 关闭 |
+| `RUNTIME_LOG_ENABLED` | 否 | 默认 `true`，运行日志入库；`false` 只打控制台 |
+| `RUNTIME_LOG_CAPTURE_SQL` | 否 | 默认 `false`，设 `true` 把 SQL 与参数也收进运行日志 |
+| `RUNTIME_LOG_RETAIN_DAYS` | 否 | 默认 `7`，运行日志保留天数 |
 | `JAVA_OPTS` | 否 | 默认 `-XX:MaxRAMPercentage=75`，小内存可下调 |
 
 Windows / macOS 上连**宿主机**的数据库时，`DB_HOST=host.docker.internal`；Linux 上用宿主机网桥 IP（`ip addr show docker0`）或 `--network host`。

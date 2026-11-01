@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -34,6 +35,14 @@ public class RequestAccessLogFilter extends OncePerRequestFilter {
     public static final String USER_ATTRIBUTE = "scaffold.access.user";
 
     private static final Logger log = LoggerFactory.getLogger("scaffold.access");
+
+    /** MDC 键名，DbLogAppender 按这些键取值入库 */
+    private static final String FIELD_METHOD = "req.method";
+    private static final String FIELD_URI = "req.uri";
+    private static final String FIELD_STATUS = "req.status";
+    private static final String FIELD_COST = "req.cost";
+    private static final String FIELD_USER = "req.user";
+    private static final String FIELD_IP = "req.ip";
 
     private static final String[] SKIP_PREFIXES = {"/assets/", "/api/health"};
 
@@ -80,14 +89,42 @@ public class RequestAccessLogFilter extends OncePerRequestFilter {
         } finally {
             long costMillis = (System.nanoTime() - start) / 1_000_000;
             String message = describe(request, response, costMillis);
-            if (response.getStatus() >= 500) {
-                log.error(message);
-            } else if (costMillis >= slowMillis) {
-                log.warn(message + " [慢请求]");
-            } else {
-                log.info(message);
+            putStructuredFields(request, response, costMillis);
+            try {
+                if (response.getStatus() >= 500) {
+                    log.error(message);
+                } else if (costMillis >= slowMillis) {
+                    log.warn(message + " [慢请求]");
+                } else {
+                    log.info(message);
+                }
+            } finally {
+                clearStructuredFields();
             }
         }
+    }
+
+    /** 结构化字段放 MDC，运行日志的 appender 据此填表；日志行本身仍是可读文本 */
+    private void putStructuredFields(HttpServletRequest request, HttpServletResponse response, long costMillis) {
+        MDC.put(FIELD_METHOD, request.getMethod());
+        MDC.put(FIELD_URI, request.getRequestURI());
+        MDC.put(FIELD_STATUS, Integer.toString(response.getStatus()));
+        MDC.put(FIELD_COST, Long.toString(costMillis));
+        MDC.put(FIELD_IP, clientIp(request));
+        Object user = request.getAttribute(USER_ATTRIBUTE);
+        if (user != null) {
+            MDC.put(FIELD_USER, String.valueOf(user));
+        }
+    }
+
+    /** 线程池会复用线程，不清会污染后续无关请求的日志 */
+    private void clearStructuredFields() {
+        MDC.remove(FIELD_METHOD);
+        MDC.remove(FIELD_URI);
+        MDC.remove(FIELD_STATUS);
+        MDC.remove(FIELD_COST);
+        MDC.remove(FIELD_USER);
+        MDC.remove(FIELD_IP);
     }
 
     private String describe(HttpServletRequest request, HttpServletResponse response, long costMillis) {
