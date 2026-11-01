@@ -152,7 +152,10 @@ async function cleanup() {
       <section class="band reveal">
         <div class="band-head">
           <SectionLabel title="概览" />
-          <Select v-model="list.query.range" :options="RANGES" style="width: 132px" @update:model-value="onSearch" />
+          <!-- Select 的根是 fragment，style 透传不进去，用外层容器控制宽度 -->
+          <div class="range-wrap">
+            <Select v-model="list.query.range" :options="RANGES" @update:model-value="onSearch" />
+          </div>
         </div>
         <div class="readout-strip">
           <Metric label="日志总量" :value="stats?.total ?? 0" unit="条" />
@@ -242,35 +245,40 @@ async function cleanup() {
     <template #cell-actions="{ row }">
       <Button variant="text" size="sm" @click="openDetail(row)">详情</Button>
     </template>
-  </ListPage>
 
-  <Drawer :open="detailOpen" title="日志详情" :sub="detail?.level" :width="640" @close="detailOpen = false">
-    <div v-if="detail" class="detail-body">
-      <dl class="detail-grid">
-        <dt>时间</dt><dd class="tnum">{{ detail.createTime?.replace('T', ' ').slice(0, 23) }}</dd>
-        <dt>级别</dt><dd><Tag :tone="LEVEL_TONE[detail.level] ?? 'neutral'">{{ detail.level }}</Tag></dd>
-        <dt>来源</dt><dd class="mono">{{ detail.logger || '—' }}</dd>
-        <dt>请求</dt><dd class="mono">{{ detail.requestMethod || '' }} {{ detail.requestUrl || '—' }}</dd>
-        <dt>状态 / 耗时</dt><dd class="tnum">{{ detail.httpStatus ?? '—' }} / {{ detail.cost == null ? '—' : detail.cost + ' ms' }}</dd>
-        <dt>账号 / IP</dt><dd class="mono">{{ detail.username || '—' }} · {{ detail.ip || '—' }}</dd>
-        <dt>链路</dt>
-        <dd>
-          <button v-if="detail.traceId" type="button" class="trace-btn mono" @click="focusTrace">{{ detail.traceId }}</button>
-          <span v-else>—</span>
-        </dd>
-      </dl>
+    <!-- 抽屉放在 ListPage 内部：路由外层是 Transition，页面组件必须是单根节点 -->
+    <Drawer :open="detailOpen" origin-from="tr" title="日志详情" :sub="detail?.level" :width="640" @close="detailOpen = false">
+      <div v-if="detail" class="detail-body">
+        <dl class="detail-grid">
+          <dt>时间</dt><dd class="tnum">{{ detail.createTime?.replace('T', ' ').slice(0, 23) }}</dd>
+          <dt>级别</dt><dd><Tag :tone="LEVEL_TONE[detail.level] ?? 'neutral'">{{ detail.level }}</Tag></dd>
+          <dt>来源</dt><dd class="mono">{{ detail.logger || '—' }}</dd>
+          <dt>请求</dt><dd class="mono">{{ detail.requestMethod || '' }} {{ detail.requestUrl || '—' }}</dd>
+          <dt>状态 / 耗时</dt><dd class="tnum">{{ detail.httpStatus ?? '—' }} / {{ detail.cost == null ? '—' : detail.cost + ' ms' }}</dd>
+          <dt>账号 / IP</dt><dd class="mono">{{ detail.username || '—' }} · {{ detail.ip || '—' }}</dd>
+          <dt>链路</dt>
+          <dd>
+            <button v-if="detail.traceId" type="button" class="trace-btn mono" @click="focusTrace">{{ detail.traceId }}</button>
+            <span v-else>—</span>
+          </dd>
+        </dl>
 
-      <div class="detail-actions">
-        <Button v-if="detail.traceId" size="sm" icon="search" @click="focusTrace">只看这条链路</Button>
+        <div class="detail-actions">
+          <Button v-if="detail.traceId" size="sm" icon="search" @click="focusTrace">只看这条链路</Button>
+        </div>
+
+        <SectionLabel title="明细" />
+        <pre class="detail-pre">{{ detailLoading ? '加载中…' : detailText }}</pre>
       </div>
-
-      <SectionLabel title="明细" />
-      <pre class="detail-pre">{{ detailLoading ? '加载中…' : detailText }}</pre>
-    </div>
-  </Drawer>
+    </Drawer>
+  </ListPage>
 </template>
 
 <style scoped>
+.range-wrap {
+  width: 132px;
+}
+
 .band-note {
   margin: 8px 0 0;
   color: var(--ink-muted);
