@@ -1,0 +1,29 @@
+spring:
+  main:
+    banner-mode: console
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:scaffold_system}?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
+    hikari:
+      data-source-properties:
+        connectionTimeZone: "${DB_TIMEZONE:+08:00}"
+        forceConnectionTimeZoneToSession: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+
+scaffold:
+  # local：令牌与验证码存在进程内存，无需部署 Redis；redis：走上面的 Redis 连接。
+  cache: ${SCAFFOLD_CACHE:local}
+  login:
+    # 首次登录不要求验证码；登录失败后该账号在此窗口内（秒）登录必须带验证码，成功或超时即解除。
+    captcha-window-seconds: ${SCAFFOLD_LOGIN_CAPTCHA_WINDOW:600}
+
+logging:
+  level:
+    root: info
+    com.scaffold: info

@@ -1,0 +1,27 @@
+# 镜像构建时排除的内容：越少越好，构建上下文越小 → 构建越快
+.git
+.gitignore
+.idea
+.vscode
+.cursor
+.DS_Store
+
+# 本地构建产物
+**/target
+**/node_modules
+**/dist
+**/*.log
+**/logs
+.local
+.npm-cache
+**/.npm-cache
+
+# 文档与设计稿不参与构建
+docs
+*.md
+!scaffold-vue/README.md
+
+# 本地环境文件
+**/.env
+**/.env.*
+!docker/.env.example
