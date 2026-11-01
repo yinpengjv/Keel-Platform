@@ -68,6 +68,9 @@ public class AuthController {
      * 签发 Swagger 访问票据：一次性、60 秒有效。
      * 浏览器带着票据打开 /swagger-ui/index.html?ticket=…，SwaggerAccessFilter
      * 校验通过后下发短时会话 Cookie，后续页面与 api-docs 请求都凭 Cookie 通过。
+     *
+     * <p>返回的 url 是<b>相对路径</b>，由前端拼上当前 origin（开发走 Vite 代理、单镜像同源），
+     * 保证 Swagger 页面与宿主页面同源，会话 Cookie 才能正确携带。</p>
      */
     @GetMapping("/swagger-ticket")
     @RequiresPermission("system:swagger:view")

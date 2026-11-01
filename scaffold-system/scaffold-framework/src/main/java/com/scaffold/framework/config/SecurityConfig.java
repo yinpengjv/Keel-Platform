@@ -33,6 +33,9 @@ public class SecurityConfig {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                // 接口文档（Swagger/Knife4j）需在系统内以同源 iframe 承载；
+                // 默认 DENY 会拦掉 iframe，改成 SAMEORIGIN——跨站仍被禁止，仅允许本站内嵌
+                .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
                 .exceptionHandling(exception -> exception
                         .authenticationEntryPoint(authenticationEntryPoint)
                         .accessDeniedHandler(accessDeniedHandler)

@@ -19,6 +19,24 @@ export default defineConfig({
         target: apiProxyTarget,
         changeOrigin: true,
       },
+      // 接口文档（Swagger/Knife4j）：开发模式前端与后端不同源，这些路径由 Vite 转发到后端，
+      // 让 iframe 里打开的文档与页面同源，票据会话 Cookie 才能正常带上
+      '/swagger-ui': {
+        target: apiProxyTarget,
+        changeOrigin: true,
+      },
+      '/v3/api-docs': {
+        target: apiProxyTarget,
+        changeOrigin: true,
+      },
+      '/doc.html': {
+        target: apiProxyTarget,
+        changeOrigin: true,
+      },
+      '/webjars': {
+        target: apiProxyTarget,
+        changeOrigin: true,
+      },
     },
   },
 })

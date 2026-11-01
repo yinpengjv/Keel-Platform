@@ -4,7 +4,11 @@ import { systemApi } from '@/api'
 import { toastError } from '@/composables/toast'
 
 /* 接口文档承载页：先取一次性票据，再让 iframe 凭票据换会话 Cookie 打开 Swagger UI。
-   权限 system:swagger:view 由后端票据接口与 SwaggerAccessFilter 双重校验。 */
+   权限 system:swagger:view 由后端票据接口与 SwaggerAccessFilter 双重校验。
+
+   票据接口返回相对路径 /swagger-ui/index.html?ticket=…，这里拼上当前前端 origin：
+   - 开发模式：前端 15173，Swagger 路径经 Vite 代理转发到后端 18080，同源打开；
+   - 单镜像部署：前后端同源（同一端口），直接命中。 */
 const src = ref('')
 const error = ref('')
 const loading = ref(true)
@@ -14,7 +18,7 @@ async function load() {
   error.value = ''
   try {
     const { url } = await systemApi.users.swaggerTicket()
-    src.value = url
+    src.value = window.location.origin + url
   } catch (e) {
     error.value = '访问票据获取失败：请确认账号有 system:swagger:view 权限'
     toastError(e, '接口文档打开失败')
