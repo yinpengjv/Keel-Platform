@@ -12,6 +12,17 @@ scaffold:
   jwt:
     secret: "${JWT_SECRET}"
     expires-seconds: 7200
+  log:
+    access:
+      # 每个请求一行访问日志；生产嫌吵可设 ACCESS_LOG_ENABLED=false
+      enabled: ${ACCESS_LOG_ENABLED:true}
+      # 超过该毫秒数记 warn，便于从容器日志里挑出慢接口
+      slow-ms: ${ACCESS_LOG_SLOW_MS:1000}
+
+logging:
+  pattern:
+    # 与 TraceIdFilter 配合：同一请求的访问日志、SQL 日志共用 traceId，可直接 grep 串联
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{traceId:-}] [%15.15t] %-38.38logger{38} : %m%n%wEx"
 
 mybatis-plus:
   configuration:

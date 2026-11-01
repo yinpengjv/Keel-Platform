@@ -27,3 +27,7 @@ logging:
   level:
     root: info
     com.scaffold: info
+    # MyBatis 的 logger 名是 mapper 接口全限定名：debug 会打印每条 SQL、参数与影响行数。
+    # 排查数据问题用；参数里可能带敏感字段，长期开启请先评估。关闭方式：SQL_LOG_LEVEL=info
+    com.scaffold.system.mapper: ${SQL_LOG_LEVEL:debug}
+    com.scaffold.generator.mapper: ${SQL_LOG_LEVEL:debug}

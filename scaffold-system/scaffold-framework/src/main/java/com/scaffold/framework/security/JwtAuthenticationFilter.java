@@ -4,6 +4,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import com.scaffold.framework.filter.RequestAccessLogFilter;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -37,6 +38,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 UsernamePasswordAuthenticationToken authentication =
                         new UsernamePasswordAuthenticationToken(username, token, List.of());
                 SecurityContextHolder.getContext().setAuthentication(authentication);
+                // 供请求访问日志读取：SecurityContext 在过滤器链结束时会被清理，日志拿不到
+                request.setAttribute(RequestAccessLogFilter.USER_ATTRIBUTE, username);
             }
         }
         filterChain.doFilter(request, response);

@@ -32,6 +32,7 @@
 | 字典与参数 | 字典类型/数据两级维护，前端 `DictSelect` 直接消费；系统参数支持内置保护 |
 | 审计日志 | 登录日志、操作日志双轨，含趋势、泳道、热力图、异常筛选、导出与清理，请求参数脱敏 |
 | 代码生成 | 导入数据库表 → 配置 → 字段映射 → 预览/下载，产出**可直接运行**的前后端 CRUD 与幂等菜单 SQL |
+| 可观测 | 每个请求一行访问日志（含状态码、耗时、登录用户），SQL 与参数可开，靠 traceId 把一次请求串起来 |
 | 部署形态 | 本机前后端分离，或前端打进后端 jar 的**单镜像单端口**部署 |
 
 ### 菜单怎么挂页面，怎么挂外部系统
@@ -196,6 +197,15 @@ docker run -d --name keel -p 8080:8080 \
 
 镜像内只有一个进程（Spring Boot）。前端静态资源由后端托管，`/` 直接出页面，深链接刷新回落 `index.html`，`/api/**` 的 404 仍是 404 而不会被吞成 HTML。Linux 上把 `DB_HOST` 换成宿主机实际 IP 或数据库容器名。
 
+容器日志里能看到两类业务日志，靠 traceId 关联同一个请求：
+
+```
+2026-11-01 21:58:55.444 DEBUG [320e9094...] c.s.s.m.S.selectUsers : ==> Parameters: null, 0, 2
+2026-11-01 21:58:55.459 INFO  [320e9094...] scaffold.access       : GET /api/system/users?pageNum=1&pageSize=2 200 228ms user=admin ip=172.17.0.1
+```
+
+按一次请求追：`docker logs keel 2>&1 | grep 320e9094`。关闭方式、日志轮转与敏感信息提醒见 [docs/docker-image.md](docs/docker-image.md) 第 5 节。
+
 ---
 
 ## 七、环境变量
@@ -212,6 +222,9 @@ docker run -d --name keel -p 8080:8080 \
 | `SCAFFOLD_CACHE` | `local` 进程内存 / `redis` 走 Redis | `local` |
 | `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | 仅 `SCAFFOLD_CACHE=redis` 时生效 | `localhost` / `6379` / 空 |
 | `SCAFFOLD_LOGIN_CAPTCHA_WINDOW` | 登录失败后强制验证码的窗口（秒） | `600` |
+| `ACCESS_LOG_ENABLED` | 每个请求一行访问日志 | `true` |
+| `ACCESS_LOG_SLOW_MS` | 超过该耗时记 warn 并标 `[慢请求]` | `1000` |
+| `SQL_LOG_LEVEL` | mapper 日志级别，`debug` 打印 SQL 与参数 | `debug` |
 | `APP_STATIC_DIR` | 前端静态目录，设置后由后端托管（镜像内为 `/app/static`） | 空（关闭） |
 | `VITE_API_PROXY_TARGET` | 前端开发代理目标（仅前端） | `http://localhost:8080` |
 

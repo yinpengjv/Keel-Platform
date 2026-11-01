@@ -28,6 +28,7 @@ docker build -f docker/Dockerfile -t keel/keel-admin:1.0.0 \
 ```bash
 docker run -d --name keel --restart unless-stopped \
   -p 8080:8080 \
+  --log-opt max-size=50m --log-opt max-file=3 \
   -e JWT_SECRET="$(openssl rand -hex 32)" \
   -e DB_HOST=192.168.1.10 -e DB_PORT=3306 -e DB_NAME=scaffold_system \
   -e DB_USERNAME=scaffold -e DB_PASSWORD='数据库密码' \
@@ -46,6 +47,9 @@ docker run -d --name keel --restart unless-stopped \
 | `DB_TIMEZONE` | 否 | 默认 `+08:00` |
 | `APP_STATIC_DIR` | 否 | 镜像内已设为 `/app/static`，指向前端产物目录 |
 | `SCAFFOLD_CACHE` | 否 | `local`（默认，内存）或 `redis` |
+| `ACCESS_LOG_ENABLED` | 否 | 默认 `true`，每个请求一行访问日志；设 `false` 关闭 |
+| `ACCESS_LOG_SLOW_MS` | 否 | 默认 `1000`，超过该耗时的请求记 warn 并标 `[慢请求]` |
+| `SQL_LOG_LEVEL` | 否 | 默认 `debug`，打印每条 SQL 与参数；设 `info` 关闭 |
 | `JAVA_OPTS` | 否 | 默认 `-XX:MaxRAMPercentage=75`，小内存可下调 |
 
 Windows / macOS 上连**宿主机**的数据库时，`DB_HOST=host.docker.internal`；Linux 上用宿主机网桥 IP（`ip addr show docker0`）或 `--network host`。
@@ -80,7 +84,46 @@ docker load < keel-admin-1.0.0.tar.gz
 
 更新版本：重新 `docker build` 出新 tag → 停旧容器 → 起新容器。数据库不动，数据不会丢。
 
-## 5. 常见问题
+## 5. 看日志
+
+容器里只有一个进程，`docker logs` 就是全部输出。启动后默认有两类业务日志：
+
+```bash
+docker logs -f keel                                # 实时跟踪
+docker logs --tail 100 keel                        # 最近 100 行
+docker logs keel 2>&1 | grep scaffold.access       # 只看访问日志
+docker logs keel 2>&1 | grep "==> Parameters"      # 只看 SQL 参数
+```
+
+每行都带 traceId，同一个请求的访问日志和它触发的所有 SQL 共用一个值：
+
+```
+2026-11-01 21:58:55.441 DEBUG [320e9094...] c.s.s.m.S.selectUsers : ==>  Preparing: SELECT ...
+2026-11-01 21:58:55.444 DEBUG [320e9094...] c.s.s.m.S.selectUsers : ==> Parameters: null, 0, 2
+2026-11-01 21:58:55.459 INFO  [320e9094...] scaffold.access       : GET /api/system/users?pageNum=1&pageSize=2 200 228ms user=admin ip=172.17.0.1
+```
+
+追一次请求：`docker logs keel 2>&1 | grep 320e9094`。
+
+| 日志 | 内容 | 关闭方式 |
+| --- | --- | --- |
+| 访问日志 | 方法、路径、状态码、耗时、登录用户、来源 IP；≥500 记 error，超过 1s 记 warn 并标 `[慢请求]` | `ACCESS_LOG_ENABLED=false` |
+| SQL 日志 | 每条 SQL、参数、影响行数（DEBUG 级） | `SQL_LOG_LEVEL=info` |
+| 应用日志 | 启动、连接池、未捕获异常堆栈 | — |
+
+静态资源（`/assets/*`、`*.js` 等后缀）与 `/api/health` 不记访问日志，否则前端 chunk 和容器探针会把日志刷满。
+
+SQL 参数是真实字段值，新增或修改用户时密码也会出现在日志里。生产长期开启前先评估，或连同访问日志一起关掉，改用系统内的「操作日志」「登录日志」页。
+
+json-file 驱动不加限制会一直增长，起容器时带上轮转参数（第 2 节的命令已包含）：
+
+```bash
+--log-opt max-size=50m --log-opt max-file=3
+```
+
+访问日志由 `RequestAccessLogFilter` 输出（logger 名 `scaffold.access`），SQL 日志靠 `application-dev.yml` 里把 mapper 的 logger 调到 debug。两者都只在服务端，前端浏览器控制台看不到。
+
+## 6. 常见问题
 
 | 现象 | 处理 |
 | --- | --- |
@@ -91,3 +134,4 @@ docker load < keel-admin-1.0.0.tar.gz
 | 构建卡在下载依赖 | 用第 1 节的 `--build-arg` 换镜像站；Maven 已在 `docker/maven-settings.xml` 里配了阿里云 |
 | 内存吃紧 | 加 `--memory=1g` 并把 `JAVA_OPTS` 的 `MaxRAMPercentage` 降到 60 |
 | 想放到 80 + 域名 | 前面套 Nginx/Caddy 反代 `8080`，镜像不用改 |
+| `docker logs` 只有启动几行，操作时没动静 | 确认没有设 `ACCESS_LOG_ENABLED=false`、`SQL_LOG_LEVEL=info`；另外查询类接口不写 `sys_oper_log`，系统内看不到属正常 |
