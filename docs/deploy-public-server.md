@@ -23,24 +23,24 @@
 
 ## 1. 上传并导入镜像
 
-交付包里的 `image/keel-admin-1.1.4.tar.gz` 就是成品镜像（约 160MB，gzip 压缩）。
+交付包里的 `image/keel-admin-1.1.5.tar.gz` 就是成品镜像（约 160MB，gzip 压缩）。
 
 ```bash
 # 传到服务器
-scp keel-admin-1.1.4.tar.gz user@服务器IP:/opt/keel/
+scp keel-admin-1.1.5.tar.gz user@服务器IP:/opt/keel/
 
 # 服务器上校验完整性（可选但建议）
 cd /opt/keel
 sha256sum -c SHA256SUMS
 
 # 导入
-docker load -i keel-admin-1.1.4.tar.gz
-docker images | grep keel      # 应看到 keel/keel-admin:1.1.4
+docker load -i keel-admin-1.1.5.tar.gz
+docker images | grep keel      # 应看到 keel/keel-admin:1.1.5
 ```
 
 > `docker load` 之后镜像就在本地了，**之后再也不需要这个 tar 包**，可以删掉省磁盘。
 > 想确认 xdb 确实在里面：
-> `docker run --rm --entrypoint sh keel/keel-admin:1.1.4 -c "ls -la /app/app.jar"`
+> `docker run --rm --entrypoint sh keel/keel-admin:1.1.5 -c "ls -la /app/app.jar"`
 > 镜像内 jar 约 67MB —— 其中约 48MB 就是 ip2region 离线库。
 
 ---
@@ -77,32 +77,39 @@ mysql -h127.0.0.1 -uroot -p -e "CREATE USER IF NOT EXISTS 'scaffold'@'%' IDENTIF
 
 ---
 
-## 3. 导入建表脚本
+## 3. 导入初始化脚本
 
 **只需执行一次**，全新数据库才需要。已有数据就不要重复导。
+
+初始化脚本只有两个文件，**先结构、后数据**：
 
 ```bash
 # 把源码包里的 sql 目录传上来，或从 GitHub clone
 cd /opt/keel
-for f in scaffold-system/sql/V*.sql; do
-  docker exec -i mysql mysql -uroot -padmin \
-    --default-character-set=utf8mb4 \
-    --init-command="SET time_zone='+08:00'" scaffold_system < "$f"
-done
+
+# ① DDL：建表
+docker exec -i mysql mysql -uroot -padmin \
+  --default-character-set=utf8mb4 \
+  --init-command="SET time_zone='+08:00'" scaffold_system \
+  < scaffold-system/sql/V1__init_schema.sql
+
+# ② DML：初始化数据
+docker exec -i mysql mysql -uroot -padmin \
+  --default-character-set=utf8mb4 \
+  --init-command="SET time_zone='+08:00'" scaffold_system \
+  < scaffold-system/sql/V2__init_data.sql
 ```
 
 两个参数别省：不加 `--default-character-set=utf8mb4` 会中文乱码；
 不加 `--init-command` 会让 `create_time` 差 8 小时。
 
-脚本按序号顺序执行，别跳：
+| 文件 | 类型 | 内容 |
+| --- | --- | --- |
+| `V1__init_schema.sql` | DDL | 18 张表的建表语句 + 老库补列（幂等 ALTER） |
+| `V2__init_data.sql` | DML | 部门/岗位/角色/用户、菜单与按钮权限、字典、参数配置 |
 
-| 文件 | 内容 |
-| --- | --- |
-| `V1__init_schema.sql` | 全部建表语句 |
-| `V2__seed_data.sql` | 种子数据（含 `admin` 账号） |
-| `V3__runtime_log.sql` | 运行日志表 |
-| `V4__dynamic_params.sql` | 动态参数表 |
-| `V5__oper_log_client.sql` | 操作日志补 IP/归属地/浏览器字段 |
+两个脚本都是**幂等**的：重复执行不会重复建表，也不会产生重复数据，
+已有数据库升级时直接重跑即可（DDL 会自动补缺失的列）。
 
 数据库在别处时，把 `docker exec -i mysql` 换成宿主机 `mysql` 命令即可。
 
@@ -120,7 +127,7 @@ vi .env
 
 ```dotenv
 # 应用镜像版本（与交付的 tar 包一致）
-KEEL_IMAGE=keel/keel-admin:1.1.4
+KEEL_IMAGE=keel/keel-admin:1.1.5
 
 # 数据库（用 compose 自带 MySQL 时保持下面即可）
 DB_PORT=3306
@@ -171,7 +178,7 @@ c.s.f.clientinfo.IpLocationService : ip2region 离线库初始化完成
 
 ```bash
 curl -s http://127.0.0.1:8080/api/health
-# {"status":"UP","version":"1.1.4",...}
+# {"status":"UP","version":"1.1.5",...}
 ```
 
 浏览器访问 `http://服务器IP:8080`，用 `admin / admin123` 登录，**上线后第一件事是改密码**。

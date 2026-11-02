@@ -148,16 +148,18 @@ JDK 17+、Maven 3.9+、Node.js 22+、MySQL 5.7+。Redis 可不装。
 ```bash
 mysql -uroot -p -e "CREATE DATABASE scaffold_system DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;"
 
+# 先结构（DDL），再数据（DML）——顺序不能反
 mysql -uroot -p --default-character-set=utf8mb4 \
   --init-command="SET time_zone='+08:00'" \
   scaffold_system < scaffold-system/sql/V1__init_schema.sql
 
 mysql -uroot -p --default-character-set=utf8mb4 \
   --init-command="SET time_zone='+08:00'" \
-  scaffold_system < scaffold-system/sql/V2__seed_data.sql
+  scaffold_system < scaffold-system/sql/V2__init_data.sql
 ```
 
 `--default-character-set=utf8mb4` 与时区设置都不能省：前者避免中文菜单名乱码，后者避免审计时间偏移 8 小时。
+两个脚本都是幂等的，重复执行不会产生重复数据。
 
 ### ② 启动后端
 
@@ -188,8 +190,8 @@ npm run dev
 
 ```bash
 # ① 构建镜像（ip2region 离线库数据文件已随源码放置，构建时直接打进镜像，不做任何下载）
-docker build -f docker/Dockerfile -t keel/keel-admin:1.1.4 \
-  --build-arg KEEL_VERSION=1.1.4 \
+docker build -f docker/Dockerfile -t keel/keel-admin:1.1.5 \
+  --build-arg KEEL_VERSION=1.1.5 \
   --build-arg JRE_IMAGE=docker.m.daocloud.io/library/eclipse-temurin:17-jre-jammy .
 
 docker compose up -d      # 起 MySQL + 后端；停止用 docker compose down（保留数据卷）
@@ -203,7 +205,7 @@ docker compose up -d      # 起 MySQL + 后端；停止用 docker compose down�
 | | **方式 A：直接跑镜像**（公网服务器用这个） | **方式 B：从源码构建** |
 | --- | --- | --- |
 | 前提 | 服务器有 Docker | 服务器有 Docker + 能拉源码 |
-| 命令 | `docker load -i keel-admin-1.1.4.tar.gz` 后 `docker compose up -d` | `docker build -f docker/Dockerfile ...` |
+| 命令 | `docker load -i keel-admin-1.1.5.tar.gz` 后 `docker compose up -d` | `docker build -f docker/Dockerfile ...` |
 | 需要下载 ip2region 吗 | **不需要**，xdb 已打包在镜像里 | 不需要，但本地源码树里要有 xdb 文件 |
 | 网络要求 | 拉不到 npm/maven 依赖也能跑 | 构建期需要联网 |
 
@@ -268,14 +270,18 @@ powershell -ExecutionPolicy Bypass -File scripts\bump-version.ps1 -Part minor # 
 - **mysql** —— MySQL 官方镜像，数据落在**具名卷** `mysql-data`；容器删了再重建会自动挂回同一份数据，不会再出现「重建后数据没了」。`restart: unless-stopped` 让它随 Docker 开机自启。
 - **keel-admin** —— 应用镜像，`DB_HOST=mysql` 用容器名直连，靠 `depends_on: service_healthy` 等数据库真正就绪后再启动。
 
-首次使用需先建一次网络并灌入建表脚本：
+首次使用需先建一次网络并灌入初始化脚本：
 
 ```bash
 docker network create keel-net
 docker compose up -d mysql
-for f in scaffold-system/sql/V*.sql; do
-  docker exec -i mysql mysql -uroot -padmin --default-character-set=utf8mb4 scaffold_system < "$f"
+
+# 先结构（DDL），再数据（DML）
+for f in V1__init_schema.sql V2__init_data.sql; do
+  docker exec -i mysql mysql -uroot -padmin --default-character-set=utf8mb4 \
+    --init-command="SET time_zone='+08:00'" scaffold_system < "scaffold-system/sql/$f"
 done
+
 docker compose up -d
 ```
 

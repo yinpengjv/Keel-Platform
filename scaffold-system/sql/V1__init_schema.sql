@@ -1,3 +1,22 @@
+-- ============================================================
+-- 龙骨中台 · DDL（表结构）
+--
+--   本文件只建表、改表，不含任何业务数据；数据见 V2__init_data.sql。
+--   全新部署：先执行本文件，再执行 V2__init_data.sql。
+--
+--   幂等：全部使用 CREATE TABLE IF NOT EXISTS 与条件化 ALTER，
+--        重复执行不产生副作用，可用于老库补结构。
+--
+--   共 18 张表：
+--     sys_dept / sys_post / sys_user / sys_role / sys_menu
+--     sys_user_role / sys_user_post / sys_role_menu / sys_role_dept
+--     sys_dict_type / sys_dict_data / sys_config
+--     sys_oper_log / sys_login_log / sys_runtime_log / sys_file
+--     gen_table / gen_table_column
+-- ============================================================
+
+-- ──────────────────────────── 组织与权限 ────────────────────────────
+
 CREATE TABLE IF NOT EXISTS sys_dept (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '部门 ID',
     parent_id BIGINT NOT NULL DEFAULT 0 COMMENT '上级部门 ID',
@@ -120,6 +139,8 @@ CREATE TABLE IF NOT EXISTS sys_role_dept (
     PRIMARY KEY (role_id, dept_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色自定义数据权限部门关联表';
 
+-- ──────────────────────────── 字典与参数 ────────────────────────────
+
 CREATE TABLE IF NOT EXISTS sys_dict_type (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '字典类型 ID',
     dict_name VARCHAR(100) NOT NULL COMMENT '字典类型名称',
@@ -168,6 +189,9 @@ CREATE TABLE IF NOT EXISTS sys_config (
     UNIQUE KEY uk_sys_config_key (config_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='参数配置表';
 
+-- ──────────────────────────── 日志 ────────────────────────────
+
+-- 操作日志：含客户端信息（browser / os），由 OperationLogAspect 写入
 CREATE TABLE IF NOT EXISTS sys_oper_log (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '操作日志 ID',
     module VARCHAR(100) NOT NULL COMMENT '操作模块',
@@ -179,6 +203,8 @@ CREATE TABLE IF NOT EXISTS sys_oper_log (
     dept_name VARCHAR(100) DEFAULT NULL COMMENT '部门名称',
     ip VARCHAR(64) DEFAULT NULL COMMENT 'IP 地址',
     location VARCHAR(128) DEFAULT NULL COMMENT '操作地点',
+    browser VARCHAR(128) DEFAULT NULL COMMENT '浏览器',
+    os VARCHAR(128) DEFAULT NULL COMMENT '操作系统',
     cost BIGINT DEFAULT NULL COMMENT '耗时毫秒',
     result TINYINT NOT NULL DEFAULT 1 COMMENT '操作结果：1 成功，0 失败',
     error_msg TEXT COMMENT '错误信息',
@@ -202,6 +228,30 @@ CREATE TABLE IF NOT EXISTS sys_login_log (
     KEY idx_sys_login_log_time (login_time),
     KEY idx_sys_login_log_username (username)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='登录日志表';
+
+-- 运行日志：请求访问、异常、SQL（可选）等运行时诊断记录
+CREATE TABLE IF NOT EXISTS sys_runtime_log (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '运行日志 ID',
+    level VARCHAR(8) NOT NULL COMMENT '日志级别：INFO / WARN / ERROR / DEBUG',
+    logger VARCHAR(120) DEFAULT NULL COMMENT '日志来源（类名或 scaffold.access）',
+    trace_id VARCHAR(40) DEFAULT NULL COMMENT '链路标识，同一次请求的多条日志共用',
+    request_method VARCHAR(8) DEFAULT NULL COMMENT '请求方法',
+    request_url VARCHAR(300) DEFAULT NULL COMMENT '请求地址',
+    http_status SMALLINT DEFAULT NULL COMMENT '响应状态码',
+    cost INT DEFAULT NULL COMMENT '耗时毫秒',
+    username VARCHAR(64) DEFAULT NULL COMMENT '登录账号',
+    ip VARCHAR(64) DEFAULT NULL COMMENT '客户端地址',
+    message VARCHAR(500) DEFAULT NULL COMMENT '日志摘要',
+    detail TEXT COMMENT '异常堆栈或 SQL 明细',
+    create_time DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3) COMMENT '记录时间',
+    PRIMARY KEY (id),
+    KEY idx_sys_runtime_log_time (create_time),
+    KEY idx_sys_runtime_log_level (level, create_time),
+    KEY idx_sys_runtime_log_trace (trace_id),
+    KEY idx_sys_runtime_log_url (request_url)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='运行日志表';
+
+-- ──────────────────────────── 文件与代码生成 ────────────────────────────
 
 CREATE TABLE IF NOT EXISTS sys_file (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '文件 ID',
@@ -252,3 +302,33 @@ CREATE TABLE IF NOT EXISTS gen_table_column (
     PRIMARY KEY (id),
     KEY idx_gen_table_column_table (table_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='代码生成字段配置';
+
+-- ──────────────────────────── 老库补列（幂等） ────────────────────────────
+-- 上面的 CREATE TABLE 已包含 browser/os；这里的 ALTER 只对「升级前建好的老库」生效，
+-- 新建库执行时列已存在，会走 `DO 0` 空操作。
+--
+-- SET NAMES 不可省：PREPARE 会按 character_set_client 解析语句文本，
+-- 连接字符集不是 utf8mb4 时，动态 SQL 里的中文 COMMENT 会被写成「???」。
+
+SET NAMES utf8mb4;
+SET @schema_name = DATABASE();
+
+SET @ddl_oper_browser = 'ALTER TABLE sys_oper_log ADD COLUMN browser VARCHAR(128) NULL COMMENT ''浏览器''';
+SET @ddl_oper_os = 'ALTER TABLE sys_oper_log ADD COLUMN os VARCHAR(128) NULL COMMENT ''操作系统''';
+
+SET @sql_oper_browser = IF(
+    (SELECT COUNT(*) FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = @schema_name AND TABLE_NAME = 'sys_oper_log' AND COLUMN_NAME = 'browser') > 0,
+    'DO 0',
+    @ddl_oper_browser);
+PREPARE stmt FROM @sql_oper_browser; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @sql_oper_os = IF(
+    (SELECT COUNT(*) FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = @schema_name AND TABLE_NAME = 'sys_oper_log' AND COLUMN_NAME = 'os') > 0,
+    'DO 0',
+    @ddl_oper_os);
+PREPARE stmt FROM @sql_oper_os; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- 存量日志没有客户端信息，无法回溯浏览器与操作系统，保持 NULL。
+-- location 同样无法回溯（IP 需外网库查询），保持原值。

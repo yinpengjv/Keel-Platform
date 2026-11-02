@@ -11,7 +11,7 @@
 | --- | --- | --- | --- |
 | 后端 `scaffold-system` | Java 17 + Spring Boot 3.5 + MyBatis | 8080 → 本项目用 18080 | 打成可执行 jar，内置 Tomcat |
 | 前端 `scaffold-vue` | Vue 3 + Vite + TypeScript | 5173 → 本项目用 15173 | 开发用 dev server，生产先 `build` 成静态文件 |
-| 数据库 | MySQL 5.7+ / MariaDB 10.4+ | 3306 | 库名 `scaffold_system`，需要先导入 `sql/V1__init_schema.sql`、`V2__seed_data.sql` |
+| 数据库 | MySQL 5.7+ / MariaDB 10.4+ | 3306 | 库名 `scaffold_system`，需要先导入 `sql/V1__init_schema.sql`（DDL）、`V2__init_data.sql`（DML） |
 | Redis（可选） | — | 6379 | 默认 `SCAFFOLD_CACHE=local` 走进程内存，**不装 Redis 也能跑** |
 
 依赖版本：
@@ -44,7 +44,7 @@ mysql -h127.0.0.1 -P3306 -uroot -p \
 mysql -h127.0.0.1 -P3306 -uroot -p \
   --default-character-set=utf8mb4 \
   --init-command="SET time_zone='+08:00'" \
-  scaffold_system < V2__seed_data.sql
+  scaffold_system < V2__init_data.sql
 ```
 
 两个参数别省：`--default-character-set=utf8mb4` 不加会中文乱码；`--init-command` 不加会让 `create_time` 差 8 小时。
@@ -188,7 +188,7 @@ sudo mysql -e "GRANT ALL PRIVILEGES ON scaffold_system.* TO 'scaffold'@'127.0.0.
 
 ```bash
 cd ~/scaffold-master-main/scaffold-system/sql
-for f in V1__init_schema.sql V2__seed_data.sql; do
+for f in V1__init_schema.sql V2__init_data.sql; do
   mysql -h127.0.0.1 -P3306 -uscaffold -p \
     --default-character-set=utf8mb4 \
     --init-command="SET time_zone='+08:00'" \
