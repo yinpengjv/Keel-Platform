@@ -35,6 +35,9 @@ import java.util.Set;
 @Service
 public class SystemManagementService {
 
+    /** 超级管理员角色编码：绕过角色-菜单分配，直接获得全部菜单 */
+    private static final String SUPER_ADMIN_ROLE_CODE = "super_admin";
+
     private final SystemManagementMapper mapper;
     private final PasswordEncoder passwordEncoder;
     private final SystemPermissionResolver permissionResolver;
@@ -412,11 +415,51 @@ public class SystemManagementService {
             throw new BusinessException("用户不存在或已删除");
         }
         if (request.getRoleIds() != null) {
+            guardSelfSuperAdmin(id, request.getRoleIds());
             replaceUserRoles(id, request.getRoleIds());
         }
         if (request.getPostIds() != null) {
             replaceUserPosts(id, request.getPostIds());
         }
+    }
+
+    /**
+     * 不允许把自己身上的超级管理员角色摘掉。
+     *
+     * <p>超级管理员绕过角色-菜单分配直接获得全部菜单；一旦该角色被移除而
+     * 新角色又没配菜单，账号就会变成「登录成功但没有任何菜单、进不去系统」，
+     * 且现场很难看出是自己刚才那次改操作导致的。
+     */
+    private void guardSelfSuperAdmin(Long userId, List<Long> newRoleIds) {
+        if (!String.valueOf(userId).equals(currentUserId())) {
+            return;
+        }
+        Long superAdminRoleId = mapper.selectRoleIdByCode(SUPER_ADMIN_ROLE_CODE);
+        if (superAdminRoleId == null) {
+            return;
+        }
+        List<Long> currentRoleIds = mapper.selectUserRoleIds(userId);
+        boolean hadSuperAdmin = currentRoleIds.contains(superAdminRoleId);
+        boolean stillHas = newRoleIds != null && newRoleIds.contains(superAdminRoleId);
+        if (hadSuperAdmin && !stillHas) {
+            throw new BusinessException("不能移除自己的超级管理员角色，否则将失去全部菜单权限且无法再进入系统");
+        }
+    }
+
+    /** 当前登录用户的 id（无法解析时返回空串） */
+    private String currentUserId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getPrincipal() == null) {
+            return "";
+        }
+        Object principal = authentication.getPrincipal();
+        if (principal instanceof Number number) {
+            return String.valueOf(number.longValue());
+        }
+        String name = String.valueOf(principal);
+        Map<String, Object> row = mapper.selectUserProfileByUsername(name);
+        Object id = row == null ? null : row.get("id");
+        return id == null ? "" : String.valueOf(id);
     }
 
     @Transactional

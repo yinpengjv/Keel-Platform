@@ -8,9 +8,10 @@ import TextInput from '@/components/ui/TextInput.vue'
 import Checkbox from '@/components/ui/Checkbox.vue'
 import { ApiError, authApi, portalApi } from '@/api'
 import NeuralNet from '@/components/NeuralNet.vue'
-import { login } from '@/composables/auth'
+import { login, navGroups } from '@/composables/auth'
 import { EASE, afterTwoFrames, gsap, motionSkipped, prefersReducedMotion, trackGlow } from '@/composables/motion'
 import { required, validate } from '@/utils/validate'
+import { handleAssetReloadError } from '@/utils/assetReload'
 import { APP } from '@/data'
 
 const router = useRouter()
@@ -165,6 +166,22 @@ async function loadLockPolicy() {
   }
 }
 
+/**
+ * 登录成功、但跳转被取消时的原因说明。
+ *
+ * 常见两种：
+ * ① 账号没有任何可见菜单（角色未分配菜单）——提示用户去分配菜单；
+ * ② 会话在跳转过程中失效 —— 提示重新登录。
+ * 早期版本这里一律显示「登录失败，请稍后重试」，把「密码错误」和
+ * 「没有菜单」混为一谈，用户会反复重试密码。
+ */
+function describeNavigationFailure(): string {
+  if (!navGroups.value.length) {
+    return '登录成功，但当前账号没有可访问的菜单，请联系管理员分配菜单权限'
+  }
+  return '登录状态已失效，请重新登录'
+}
+
 async function submit() {
   formError.value = ''
   errors.value = validate(form, {
@@ -183,12 +200,20 @@ async function submit() {
       captchaUuid: captchaRequired.value ? captchaUuid.value : '',
     }, remember.value)
     await playSuccess()
-    const redirect = typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/') ? route.query.redirect : '/'
+    const redirect = typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/')
+      ? route.query.redirect
+      : '/'
     const failure = await router.replace(redirect)
-    // 进入外壳的导航被取消（如菜单加载期间会话过期）时仍停在登录页：恢复登录按钮
-    if (failure || router.currentRoute.value.name === 'login') succeeded.value = false
+    // 导航被取消时仍停在登录页：区分原因给出准确提示，避免一律显示「登录失败」
+    if (failure || router.currentRoute.value.name === 'login') {
+      succeeded.value = false
+      formError.value = describeNavigationFailure()
+      return
+    }
   } catch (error) {
     succeeded.value = false
+    // 静态资源版本不一致（镜像升级后浏览器仍持有旧页面）：刷新后重试登录
+    if (handleAssetReloadError(error)) return
     formError.value = error instanceof ApiError ? error.message : '登录失败，请稍后重试'
     // 登录失败后后端会开启验证码窗口，同步把验证码框显示出来
     await checkChallenge(username, true)

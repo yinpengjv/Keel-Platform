@@ -63,7 +63,22 @@ public class SpaStaticConfig implements WebMvcConfigurer {
                         if (requested.exists() && requested.isReadable()) {
                             return requested;
                         }
+                        // 带扩展名的是构建产物（js/css/图片/字体等）：文件不存在就老实返回 404。
+                        // 若把它们回落到 index.html，浏览器会拿到 Content-Type: text/html 的 HTML
+                        // 去执行动态 import()，抛出的错误既不是 404 也不是业务错误，
+                        // 表现为「登录接口成功但页面进不去」，且无法从服务端日志定位。
+                        if (looksLikeStaticAsset(resourcePath)) {
+                            return null;
+                        }
                         return indexOf(location);
+                    }
+
+                    /** 路径最后一段是否带文件扩展名（排除目录名里的点，如 a.b/c） */
+                    private boolean looksLikeStaticAsset(String resourcePath) {
+                        int slash = resourcePath.lastIndexOf('/');
+                        String last = slash >= 0 ? resourcePath.substring(slash + 1) : resourcePath;
+                        int dot = last.lastIndexOf('.');
+                        return dot > 0 && dot < last.length() - 1;
                     }
 
                     private Resource indexOf(Resource location) throws IOException {

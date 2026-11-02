@@ -125,6 +125,14 @@ public interface SystemManagementMapper {
             """)
     List<Map<String, Object>> selectActiveRoleScopes(@Param("userId") Long userId);
 
+    /** 按角色编码查角色 id（用于识别超级管理员角色） */
+    @Select("SELECT id FROM sys_role WHERE role_code = #{code} AND deleted = 0 LIMIT 1")
+    Long selectRoleIdByCode(@Param("code") String code);
+
+    /** 查用户当前绑定的角色 id 列表 */
+    @Select("SELECT role_id FROM sys_user_role WHERE user_id = #{userId}")
+    List<Long> selectUserRoleIds(@Param("userId") Long userId);
+
     @Select("""
             SELECT d.id
             FROM sys_dept d

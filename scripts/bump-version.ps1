@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 # 龙骨中台 · 版本号递增（Windows）
 #
 #   项目根的 VERSION 文件是唯一版本源：前端界面显示、后端 /api/health 回显、
@@ -19,6 +19,18 @@ param(
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSScriptRoot
 $VersionFile = Join-Path $Root 'VERSION'
+
+# Windows PowerShell 5.1 按 ANSI 读取无 BOM 的 UTF-8 脚本，中文会变乱码并导致语法错误。
+# 这里先把自身重写为带 BOM 的 UTF-8，保证后续（含本行之后的解析）都正常。
+$Self = $MyInvocation.MyCommand.Path
+if ($Self) {
+  $selfText = [System.IO.File]::ReadAllText($Self, [System.Text.Encoding]::UTF8)
+  $selfBytes = [System.IO.File]::ReadAllBytes($Self)
+  $hasBom = $selfBytes.Length -ge 3 -and $selfBytes[0] -eq 0xEF -and $selfBytes[1] -eq 0xBB -and $selfBytes[2] -eq 0xBF
+  if (-not $hasBom) {
+    [System.IO.File]::WriteAllText($Self, $selfText, (New-Object System.Text.UTF8Encoding($true)))
+  }
+}
 
 if (-not (Test-Path $VersionFile)) { throw "找不到版本文件：$VersionFile" }
 $current = (Get-Content $VersionFile -Raw).Trim()
@@ -41,7 +53,9 @@ $next = "$major.$minor.$patch"
 # 同步 .env 里的镜像 tag
 $envFile = Join-Path $Root '.env'
 if (Test-Path $envFile) {
-  $text = Get-Content $envFile -Raw
+  # 必须显式指定 UTF8：Get-Content -Raw 默认按 ANSI 读，会把中文写回时弄乱码，
+  # 换行也可能被吞掉，导致 KEEL_IMAGE 行被并进注释。
+  $text = [System.IO.File]::ReadAllText($envFile, [System.Text.Encoding]::UTF8)
   $text = [regex]::Replace($text, '(?m)^KEEL_IMAGE=keel/keel-admin:.*$', "KEEL_IMAGE=keel/keel-admin:$next")
   [System.IO.File]::WriteAllText($envFile, $text, (New-Object System.Text.UTF8Encoding($false)))
 }

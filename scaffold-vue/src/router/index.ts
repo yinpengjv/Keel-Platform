@@ -4,6 +4,7 @@ import { authed, clearSession, dynamicRoutes, loadRoutes, navGroups, refreshUser
 import { pushToast } from '@/composables/toast'
 import { APP } from '@/data'
 import AppShell from '@/components/layout/AppShell.vue'
+import { handleAssetReloadError } from '@/utils/assetReload'
 
 const staticRoutes: RouteRecordRaw[] = [
   { path: '/login', name: 'login', component: () => import('@/views/Login.vue'), meta: { public: true, title: '登录' } },
@@ -80,7 +81,9 @@ router.beforeEach(async (to) => {
     const version = sessionVersion.value
     try {
       if (!await ensureRoutes()) return false
-    } catch {
+    } catch (error) {
+      // 静态资源版本不一致：刷新页面取新版资源后重试，而不是让用户重新登录
+      if (handleAssetReloadError(error)) return false
       if (version !== sessionVersion.value) return false
       clearSession()
       pushToast('菜单加载失败，请重新登录', 'danger')
