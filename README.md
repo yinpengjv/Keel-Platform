@@ -187,7 +187,7 @@ npm run dev
 ### 或者：一条命令起全套（推荐）
 
 ```bash
-# ① 构建镜像（ip2region 离线库缺失时 Dockerfile 会自己联网拉取，无需手工下载）
+# ① 构建镜像（ip2region 离线库数据文件已随源码放置，构建时直接打进镜像，不做任何下载）
 docker build -f docker/Dockerfile -t keel/keel-admin:1.1.4 \
   --build-arg KEEL_VERSION=1.1.4 \
   --build-arg JRE_IMAGE=docker.m.daocloud.io/library/eclipse-temurin:17-jre-jammy .
@@ -204,26 +204,27 @@ docker compose up -d      # 起 MySQL + 后端；停止用 docker compose down�
 | --- | --- | --- |
 | 前提 | 服务器有 Docker | 服务器有 Docker + 能拉源码 |
 | 命令 | `docker load -i keel-admin-1.1.4.tar.gz` 后 `docker compose up -d` | `docker build -f docker/Dockerfile ...` |
-| 需要下载 ip2region 吗 | **不需要**，xdb 已打包在镜像里 | 不需要，Dockerfile 会自动兜底下载 |
+| 需要下载 ip2region 吗 | **不需要**，xdb 已打包在镜像里 | 不需要，但本地源码树里要有 xdb 文件 |
 | 网络要求 | 拉不到 npm/maven 依赖也能跑 | 构建期需要联网 |
 
 > **ip2region 离线库**：登录日志与操作日志的「来源」列显示 IP 归属地，依赖
 > `ip2region` 的 xdb 数据文件（`ip2region_v4.xdb` 约 11MB、`ip2region_v6.xdb` 约 37MB）。
 > 这两个文件**已经打进镜像**，运行时无需联网、无外部服务依赖。
 >
-> 为什么源码仓库里没有它？48MB 的二进制不适合入库，被 `.gitignore` 排除了。
-> 所以：**从源码构建时** Dockerfile 会在 `COPY` 后检查，缺文件就自动从镜像站拉取
-> （依次尝试 ghproxy.net / GitHub / gitee），拉不到也不中断构建 ——
-> 应用照常启动，归属地回落为「内网/未知」，不影响登录与业务功能。
+> **构建镜像时不做任何下载**。数据文件直接来自源码树里的
+> `scaffold-system/scaffold-framework/src/main/resources/ip2region/`，
+> 由 Dockerfile 的 `COPY` 一步带进 jar。
 >
-> ⚠️ **下载必须校验完整性**。xdb 文件下载中断会留下「看着有、其实残缺」的文件，
+> 因为 48MB 的二进制不适合入库，`.gitignore` 排除了它 ——
+> **换机器克隆源码后本地没有这两个文件**，需要自行放置一次：
+> `bash scripts/fetch-ip2region.sh`（Windows：`powershell -ExecutionPolicy Bypass -File scripts\fetch-ip2region.ps1`）。
+>
+> ⚠️ **放置时务必校验完整性**。xdb 下载中断会留下「看着有、其实残缺」的文件，
 > 它不会报错，却会让约 1/3 的 IPv6 查询读越界（`IndexOutOfBoundsException`），
-> 归属地静默变成「未知」。因此 Dockerfile 与 `scripts/fetch-ip2region.*`
-> 都会**按上游 Content-Length 校验字节数**，不一致就换源重下。
-> 期望值：v4 = 11,122,714 字节，v6 = 37,277,813 字节。
+> 归属地静默变成「未知」。`scripts/fetch-ip2region.*` 已按远端 Content-Length
+> 校验字节数（v4 = 11,122,714 / v6 = 37,277,813），不一致就换源重下。
 >
-> 想提前手动下载也可以（可选，非必需）：
-> `bash scripts/fetch-ip2region.sh`（Windows：`powershell -ExecutionPolicy Bypass -File scripts\fetch-ip2region.ps1`）
+> 缺文件时应用照常启动，归属地回落为「内网/未知」，不影响登录与业务功能。
 
 ### 版本号怎么管
 

@@ -56,35 +56,12 @@ COPY scaffold-system scaffold-system
 COPY VERSION VERSION
 
 # ip2region 离线库（xdb）随 jar 一起打包，运行时无需联网、无外部服务依赖。
-# 二进制共约 48MB，不适合入库，因此 .gitignore 排除了它：克隆代码后本地默认没有。
-# 这里做兜底——本地已有且完整就直接用（COPY 已带进来），否则构建时在线拉取；
-# 拉取失败也不中断构建，应用会回落为「内网/未知」归属地，不影响启动与业务功能。
-#
-# 必须校验文件大小：下载中断产生的残缺文件不会报错，却会让约 1/3 的 IPv6
-# 查询读越界（IndexOutOfBoundsException），归属地静默变成「未知」。
-RUN mkdir -p scaffold-system/scaffold-framework/src/main/resources/ip2region && \
-    for spec in "ip2region_v4.xdb:11122714" "ip2region_v6.xdb:37277813"; do \
-      f=${spec%%:*}; expect=${spec##*:}; \
-      d=scaffold-system/scaffold-framework/src/main/resources/ip2region/$f; \
-      if [ -f "$d" ] && [ "$(stat -c%s "$d")" = "$expect" ]; then \
-        echo ">>> $f 已存在且完整，跳过下载"; continue; \
-      fi; \
-      echo ">>> 缺少 $f（或大小不符），构建时在线拉取 ip2region 离线库"; \
-      rm -f "$d"; \
-      for base in \
-        "https://ghproxy.net/https://raw.githubusercontent.com/lionsoul2014/ip2region/master/data" \
-        "https://raw.githubusercontent.com/lionsoul2014/ip2region/master/data" \
-        "https://gh-proxy.com/https://raw.githubusercontent.com/lionsoul2014/ip2region/master/data" \
-        "https://gitee.com/lionsoul/ip2region/raw/master/data"; do \
-        if curl -fsSL --connect-timeout 15 --max-time 600 -o "$d" "$base/$f"; then \
-          if [ "$(stat -c%s "$d")" = "$expect" ]; then \
-            echo ">>> $f 下载完成（完整性校验通过）"; break; \
-          fi; \
-          echo ">>> $f 大小不符，可能下载不完整，换源重试"; rm -f "$d"; \
-        fi; \
-      done; \
-      if [ ! -f "$d" ]; then echo ">>> $f 下载失败，归属地功能将回落为内网/未知"; fi; \
-    done
+# 数据文件已存在于 scaffold-framework 的 resources 目录，由上面的 COPY 一并带入，
+# 构建过程不做任何下载或更新。
+# 注：xdb 是二进制（约 48MB），未纳入 git 版本库；换机器克隆源码后需自行放置到
+#     scaffold-system/scaffold-framework/src/main/resources/ip2region/
+#     （脚本见 scripts/fetch-ip2region.ps1 / .sh），否则归属地回落为「内网/未知」，
+#     不影响启动与业务功能。
 
 RUN --mount=type=cache,target=/root/.m2/repository \
     mvn -B -f scaffold-system/pom.xml -pl scaffold-admin -am -DskipTests package

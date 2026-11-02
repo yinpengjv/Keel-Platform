@@ -41,7 +41,7 @@ docker images | grep keel      # 应看到 keel/keel-admin:1.1.4
 > `docker load` 之后镜像就在本地了，**之后再也不需要这个 tar 包**，可以删掉省磁盘。
 > 想确认 xdb 确实在里面：
 > `docker run --rm --entrypoint sh keel/keel-admin:1.1.4 -c "ls -la /app/app.jar"`
-> 镜像内 jar 约 63MB —— 那 29MB 就是 ip2region 离线库。
+> 镜像内 jar 约 67MB —— 其中约 48MB 就是 ip2region 离线库。
 
 ---
 
@@ -237,9 +237,10 @@ docker exec mysql mysqldump -uroot -padmin --single-transaction \
 | | **直接跑镜像**（本文） | 从源码构建 |
 | --- | --- | --- |
 | 什么时候用 | 公网服务器上线 | 改了代码要验证 |
-| 需要下载 ip2region | **不需要**，已打包在镜像里 | 不需要，Dockerfile 自动兜底下载 |
+| 需要下载 ip2region | **不需要**，已打包在镜像里 | 不需要，但本地源码树里要有 xdb 文件 |
 | 需要联网 | 不需要（除了 `docker load`） | 需要（拉 npm/maven 依赖） |
 | 需要源码 | 不需要 | 需要 |
 
-那个 `scripts/fetch-ip2region.ps1` / `.sh` 脚本是**可选的**，
-只在你想提前把数据文件放进源码树时才有意义。构建镜像本身不依赖它。
+那个 `scripts/fetch-ip2region.ps1` / `.sh` 脚本只在**换机器克隆源码**时需要跑一次
+（因为 xdb 二进制不进 git）。构建镜像本身不下载任何东西 ——
+数据文件随源码树一起被 `COPY` 进 jar。
