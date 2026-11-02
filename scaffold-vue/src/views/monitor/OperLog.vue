@@ -21,6 +21,8 @@ interface OperRow {
   url: string
   ip?: string
   location?: string
+  browser?: string
+  os?: string
   params?: string
   result: number
   errorMsg?: string
@@ -42,6 +44,7 @@ const columns: Column[] = [
   { key: 'operName', title: '操作人' },
   { key: 'url', title: '请求' },
   { key: 'ip', title: '来源' },
+  { key: 'client', title: '客户端' },
   { key: 'result', title: '结果', width: 90 },
   { key: 'cost', title: '耗时', width: 90, align: 'right' },
   { key: 'operTime', title: '操作时间', width: 168 },
@@ -211,6 +214,7 @@ async function clearAll() {
         <div v-if="row.location" class="cell-sub">{{ row.location }}</div>
       </div>
     </template>
+    <template #cell-client="{ row }"><span class="muted">{{ [row.browser, row.os].filter(Boolean).join(' · ') || '—' }}</span></template>
     <template #cell-result="{ row }"><Tag :tone="row.result === 1 ? 'ok' : 'danger'" dot>{{ row.result === 1 ? '成功' : '失败' }}</Tag></template>
     <template #cell-cost="{ row }"><span class="tnum soft">{{ row.cost }} ms</span></template>
     <template #cell-operTime="{ row }"><span class="tnum soft">{{ row.operTime }}</span></template>
@@ -226,6 +230,7 @@ async function clearAll() {
           <div class="kv"><div class="kv-label">操作时间</div><div class="kv-value tnum">{{ detail.operTime }}</div></div>
           <div class="kv span-2"><div class="kv-label">请求</div><div class="kv-value mono">{{ detail.method }} {{ detail.url }}</div></div>
           <div class="kv"><div class="kv-label">来源</div><div class="kv-value tnum">{{ detail.ip || '—' }} {{ detail.location || '' }}</div></div>
+          <div class="kv"><div class="kv-label">客户端</div><div class="kv-value">{{ [detail.browser, detail.os].filter(Boolean).join(' · ') || '—' }}</div></div>
           <div class="kv"><div class="kv-label">结果 / 耗时</div><div class="kv-value"><Tag :tone="detail.result === 1 ? 'ok' : 'danger'" dot>{{ detail.result === 1 ? '成功' : '失败' }}</Tag> <span class="tnum soft">{{ detail.cost }} ms</span></div></div>
         </div>
         <div class="section-label" style="margin: 20px 0 10px">请求参数</div>

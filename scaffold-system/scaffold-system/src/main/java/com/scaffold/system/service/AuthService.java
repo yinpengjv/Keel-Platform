@@ -1,6 +1,7 @@
 package com.scaffold.system.service;
 
 import com.scaffold.common.exception.BusinessException;
+import com.scaffold.framework.clientinfo.ClientInfoRecord;
 import com.scaffold.framework.security.JwtService;
 import com.scaffold.framework.security.LoginChallengeService;
 import com.scaffold.framework.security.TokenStore;
@@ -43,10 +44,12 @@ public class AuthService {
         this.loginChallenge = loginChallenge;
     }
 
-    public LoginResponse login(LoginRequest request) {
+    public LoginResponse login(LoginRequest request, ClientInfoRecord client) {
+        ClientInfoRecord info = client == null ? ClientInfoRecord.empty() : client;
         AuthUserRow user = authMapper.selectUserByUsername(request.getUsername());
         if (user == null || !passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-            authMapper.insertLoginLog(request.getUsername(), 0, "账号或密码错误");
+            authMapper.insertLoginLog(request.getUsername(), 0, "账号或密码错误",
+                    info.ip(), info.location(), info.browser(), info.os());
             // 提示锁定阈值，让用户知道再试错几次会被锁；文案对存在与不存在的账号完全一致，不泄露账号是否存在
             int maxFailures = loginChallenge.maxFailures();
             String message = maxFailures > 0
@@ -55,21 +58,25 @@ public class AuthService {
             throw new BusinessException(message);
         }
         if (user.getStatus() == null || user.getStatus() != 1) {
-            authMapper.insertLoginLog(request.getUsername(), 0, "账号已停用");
+            authMapper.insertLoginLog(request.getUsername(), 0, "账号已停用",
+                    info.ip(), info.location(), info.browser(), info.os());
             throw new BusinessException("账号已停用");
         }
         String token = jwtService.generateToken(user.getId(), user.getUsername());
         tokenStore.store(token, user.getUsername(), jwtService.expiresSeconds());
-        authMapper.insertLoginLog(user.getUsername(), 1, "登录成功");
+        authMapper.insertLoginLog(user.getUsername(), 1, "登录成功",
+                info.ip(), info.location(), info.browser(), info.os());
         authMapper.updateLastLoginTime(user.getId());
         return new LoginResponse(token, jwtService.expiresSeconds());
     }
 
-    public void logout() {
+    public void logout(ClientInfoRecord client) {
+        ClientInfoRecord info = client == null ? ClientInfoRecord.empty() : client;
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.getCredentials() instanceof String token) {
             tokenStore.revoke(token);
-            authMapper.insertLoginLog(String.valueOf(authentication.getPrincipal()), 1, "退出登录");
+            authMapper.insertLoginLog(String.valueOf(authentication.getPrincipal()), 1, "退出登录",
+                    info.ip(), info.location(), info.browser(), info.os());
         }
         SecurityContextHolder.clearContext();
     }

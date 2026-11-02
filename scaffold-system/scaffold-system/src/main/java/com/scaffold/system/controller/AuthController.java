@@ -3,6 +3,8 @@ package com.scaffold.system.controller;
 import com.scaffold.common.domain.R;
 import com.scaffold.common.exception.BusinessException;
 import com.scaffold.framework.audit.OperLog;
+import com.scaffold.framework.clientinfo.ClientInfoRecord;
+import com.scaffold.framework.clientinfo.IpLocationService;
 import com.scaffold.framework.security.CaptchaService;
 import com.scaffold.framework.security.KeyValueStore;
 import com.scaffold.framework.security.LoginChallengeService;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import jakarta.servlet.http.HttpServletRequest;
 
 import java.security.SecureRandom;
 import java.util.HexFormat;
@@ -35,6 +38,7 @@ public class AuthController {
     private final CaptchaService captchaService;
     private final LoginChallengeService loginChallenge;
     private final KeyValueStore keyValueStore;
+    private final IpLocationService ipLocationService;
 
     private static final SecureRandom RANDOM = new SecureRandom();
     /** Swagger 一次性票据与回话 Cookie 的存储前缀 */
@@ -43,11 +47,12 @@ public class AuthController {
     private static final String SWAGGER_COOKIE = "SWAGGER_TICKET";
 
     public AuthController(AuthService authService, CaptchaService captchaService, LoginChallengeService loginChallenge,
-                          KeyValueStore keyValueStore) {
+                          KeyValueStore keyValueStore, IpLocationService ipLocationService) {
         this.authService = authService;
         this.captchaService = captchaService;
         this.loginChallenge = loginChallenge;
         this.keyValueStore = keyValueStore;
+        this.ipLocationService = ipLocationService;
     }
 
     @GetMapping("/captcha")
@@ -89,7 +94,7 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public R<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
+    public R<LoginResponse> login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
         String username = request.getUsername().trim();
         // 锁定检查优先于一切：失败次数达到阈值（参数 sys.security.maxLoginFailures）后直接拒绝
         loginChallenge.lockRemainingSeconds(username).ifPresent(remaining ->
@@ -108,7 +113,7 @@ public class AuthController {
             }
         }
         try {
-            LoginResponse response = authService.login(request);
+            LoginResponse response = authService.login(request, ClientInfoRecord.of(httpRequest, ipLocationService));
             loginChallenge.clear(username);
             return R.success(response);
         } catch (BusinessException exception) {
@@ -131,8 +136,8 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public R<Void> logout() {
-        authService.logout();
+    public R<Void> logout(HttpServletRequest httpRequest) {
+        authService.logout(ClientInfoRecord.of(httpRequest, ipLocationService));
         return R.success(null);
     }
 

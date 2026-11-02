@@ -47,5 +47,9 @@ scaffold-vue/.tmp-*
 !/scaffold-vue/src/data/
 !/scaffold-vue/src/data/**
 
+# ip2region 离线库数据文件（约 29MB，二进制不适合入库）
+# 用 scripts/fetch-ip2region.sh 或 fetch-ip2region.ps1 下载后再构建
+**/ip2region/*.xdb
+
 # 本地运行状态：pid、日志、jwt 密钥
 .local/

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.scaffold.framework.clientinfo.ClientInfo;
 import jakarta.servlet.http.HttpServletRequest;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
@@ -52,7 +53,9 @@ public class OperationLogAspect {
                 request == null ? null : request.getRequestURI(),
                 truncate(params(joinPoint.getArgs()), MAX_PARAMS_LENGTH),
                 currentUsername(),
-                request == null ? null : clientIp(request),
+                request == null ? null : ClientInfo.ip(request),
+                request == null ? null : ClientInfo.browser(request),
+                request == null ? null : ClientInfo.os(request),
                 System.currentTimeMillis() - start,
                 result,
                 truncate(error == null ? null : error.getMessage(), MAX_ERROR_LENGTH)
@@ -104,18 +107,6 @@ public class OperationLogAspect {
     private String currentUsername() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         return authentication == null ? null : String.valueOf(authentication.getPrincipal());
-    }
-
-    private String clientIp(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
-        }
-        String realIp = request.getHeader("X-Real-IP");
-        if (realIp != null && !realIp.isBlank()) {
-            return realIp;
-        }
-        return request.getRemoteAddr();
     }
 
     private String truncate(String value, int maxLength) {

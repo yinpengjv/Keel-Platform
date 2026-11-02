@@ -383,6 +383,8 @@ public interface SystemManagementMapper {
                    l.dept_name AS dept,
                    l.ip,
                    l.location,
+                   l.browser,
+                   l.os,
                    l.cost,
                    l.result,
                    l.error_msg AS errorMsg,

@@ -289,6 +289,8 @@ public class SystemManagementService {
                         value(row, "dept"),
                         value(row, "ip"),
                         value(row, "location"),
+                        value(row, "browser"),
+                        value(row, "os"),
                         value(row, "cost"),
                         resultText(row.get("result")),
                         value(row, "operTime"),
@@ -296,7 +298,7 @@ public class SystemManagementService {
                 ))
                 .toList();
         return csv(
-                List.of("模块", "类型", "请求方式", "请求地址", "请求参数", "操作人", "部门", "IP", "地点", "耗时", "结果", "操作时间", "异常信息"),
+                List.of("模块", "类型", "请求方式", "请求地址", "请求参数", "操作人", "部门", "IP", "地点", "浏览器", "系统", "耗时", "结果", "操作时间", "异常信息"),
                 data
         );
     }

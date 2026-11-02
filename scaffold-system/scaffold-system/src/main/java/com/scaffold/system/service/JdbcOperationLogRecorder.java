@@ -2,6 +2,7 @@ package com.scaffold.system.service;
 
 import com.scaffold.framework.audit.OperationLogEntry;
 import com.scaffold.framework.audit.OperationLogRecorder;
+import com.scaffold.framework.clientinfo.IpLocationService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -9,17 +10,19 @@ import org.springframework.stereotype.Component;
 public class JdbcOperationLogRecorder implements OperationLogRecorder {
 
     private final JdbcTemplate jdbcTemplate;
+    private final IpLocationService ipLocationService;
 
-    public JdbcOperationLogRecorder(JdbcTemplate jdbcTemplate) {
+    public JdbcOperationLogRecorder(JdbcTemplate jdbcTemplate, IpLocationService ipLocationService) {
         this.jdbcTemplate = jdbcTemplate;
+        this.ipLocationService = ipLocationService;
     }
 
     @Override
     public void record(OperationLogEntry entry) {
         jdbcTemplate.update("""
                 INSERT INTO sys_oper_log (module, action, request_method, request_url, request_params,
-                    oper_name, dept_name, ip, location, cost, result, error_msg)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    oper_name, dept_name, ip, location, browser, os, cost, result, error_msg)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 entry.module(),
                 entry.action(),
@@ -29,17 +32,12 @@ public class JdbcOperationLogRecorder implements OperationLogRecorder {
                 entry.operator(),
                 null,
                 entry.ip(),
-                location(entry.ip()),
+                ipLocationService.locate(entry.ip()),
+                entry.browser(),
+                entry.os(),
                 entry.cost(),
                 entry.result(),
                 entry.errorMessage()
         );
-    }
-
-    private String location(String ip) {
-        if (ip == null || ip.isBlank()) {
-            return null;
-        }
-        return "127.0.0.1".equals(ip) || "0:0:0:0:0:0:0:1".equals(ip) ? "本机" : "内网";
     }
 }

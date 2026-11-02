@@ -8,6 +8,8 @@ public record OperationLogEntry(
         String requestParams,
         String operator,
         String ip,
+        String browser,
+        String os,
         long cost,
         int result,
         String errorMessage
