@@ -425,8 +425,7 @@ async function batchRemove(ids: (string | number)[]) {
     <template #cell-phone="{ row }"><span class="tnum muted">{{ row.phone || '—' }}</span></template>
     <template #cell-status="{ row }"><StatusTag :status="row.status" /></template>
     <template #cell-online="{ row }">
-      <Tag v-if="row.online" tone="success">在线</Tag>
-      <span v-else class="faint">离线</span>
+      <Tag :tone="row.online ? 'ok' : 'neutral'" dot>{{ row.online ? '在线' : '离线' }}</Tag>
     </template>
     <template #cell-createTime="{ row }"><span class="tnum soft">{{ row.createTime }}</span></template>
     <template #cell-actions="{ row }">
