@@ -1,11 +1,16 @@
 # ============================================================
 # 龙骨中台 · 下载 ip2region 离线库数据文件（Windows）
 #
-#   IP 归属地查询依赖 ip2region 的 xdb 数据文件（约 29MB），
+#   IP 归属地查询依赖 ip2region 的 xdb 数据文件（合计约 48MB），
 #   二进制文件不适合入库，因此不入 git；克隆代码后执行本脚本补齐。
 #
 #   用法：
 #     powershell -ExecutionPolicy Bypass -File scripts\fetch-ip2region.ps1
+#
+#   注意：这是**可选**步骤。
+#   - 直接跑镜像部署：不需要，xdb 已打包在镜像里。
+#   - 从源码构建镜像：不需要，Dockerfile 会自动兜底下载。
+#   本脚本只是让你能提前把文件放进源码树。
 # ============================================================
 
 $ErrorActionPreference = 'Stop'
@@ -26,11 +31,19 @@ $TargetDir = Join-Path $Root 'scaffold-system\scaffold-framework\src\main\resour
 
 # 国内网络直连 GitHub 不稳，依次尝试多个镜像
 $Mirrors = @(
-    'https://raw.githubusercontent.com/lionsoul2014/ip2region/master/data',
     'https://ghproxy.net/https://raw.githubusercontent.com/lionsoul2014/ip2region/master/data',
+    'https://raw.githubusercontent.com/lionsoul2014/ip2region/master/data',
     'https://gh-proxy.com/https://raw.githubusercontent.com/lionsoul2014/ip2region/master/data',
     'https://gitee.com/lionsoul/ip2region/raw/master/data'
 )
+
+# 远端期望大小（字节）。ip2region 上游文件大小是稳定的，
+# 用它做完整性校验，避免下载中断产生「看着有、其实残缺」的文件 ——
+# 残缺文件不会报错，但会让约 1/3 的 IPv6 查询读越界、归属地显示未知。
+$Expected = @{
+    'ip2region_v4.xdb' = 11122714
+    'ip2region_v6.xdb' = 37277813
+}
 
 if (-not (Test-Path $TargetDir)) {
     New-Item -ItemType Directory -Force -Path $TargetDir | Out-Null
@@ -39,20 +52,30 @@ if (-not (Test-Path $TargetDir)) {
 function Get-RemoteFile {
     param([string]$Name, [string]$Dest)
 
-    if ((Test-Path $Dest) -and ((Get-Item $Dest).Length -gt 1000000)) {
-        Write-Host ("  OK  {0} 已存在（{1:N1} MB），跳过" -f $Name, ((Get-Item $Dest).Length / 1MB)) -ForegroundColor DarkGray
-        return $true
+    $expect = $Expected[$Name]
+
+    # 已存在且大小与远端一致则跳过
+    if (Test-Path $Dest) {
+        $cur = (Get-Item $Dest).Length
+        if ($cur -eq $expect) {
+            Write-Host ("  OK  {0} 已存在且完整（{1:N0} 字节），跳过" -f $Name, $cur) -ForegroundColor DarkGray
+            return $true
+        }
+        Write-Host ("  !   {0} 已存在但大小不符（当前 {1:N0} / 期望 {2:N0}），重新下载" -f $Name, $cur, $expect) -ForegroundColor Yellow
+        Remove-Item $Dest -Force
     }
 
     foreach ($mirror in $Mirrors) {
         $url = "$mirror/$Name"
         Write-Host "  -> 尝试 $url"
         try {
-            Invoke-WebRequest -Uri $url -OutFile $Dest -UseBasicParsing -TimeoutSec 300
-            if ((Get-Item $Dest).Length -gt 1000000) {
-                Write-Host ("  OK  {0} 下载完成（{1:N1} MB）" -f $Name, ((Get-Item $Dest).Length / 1MB)) -ForegroundColor Green
+            Invoke-WebRequest -Uri $url -OutFile $Dest -UseBasicParsing -TimeoutSec 600
+            $size = (Get-Item $Dest).Length
+            if ($size -eq $expect) {
+                Write-Host ("  OK  {0} 下载完成（{1:N0} 字节，完整性校验通过）" -f $Name, $size) -ForegroundColor Green
                 return $true
             }
+            Write-Host ("  !   {0} 大小不符（{1:N0} / 期望 {2:N0}），可能下载不完整，换源重试" -f $Name, $size, $expect) -ForegroundColor Yellow
         } catch {
             # 换下一个镜像
         }
