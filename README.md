@@ -187,14 +187,25 @@ npm run dev
 ### 或者：一条命令起全套（推荐）
 
 ```bash
-docker build -f docker/Dockerfile -t keel/keel-admin:1.1.0 \
-  --build-arg KEEL_VERSION=1.1.0 \
+# ① 先补齐 ip2region 离线库（约 29MB，不入 git，克隆后必须先执行）
+bash scripts/fetch-ip2region.sh          # Windows: powershell -ExecutionPolicy Bypass -File scripts\fetch-ip2region.ps1
+
+# ② 构建镜像
+docker build -f docker/Dockerfile -t keel/keel-admin:1.1.3 \
+  --build-arg KEEL_VERSION=1.1.3 \
   --build-arg JRE_IMAGE=docker.m.daocloud.io/library/eclipse-temurin:17-jre-jammy .
 
 docker compose up -d      # 起 MySQL + 后端；停止用 docker compose down（保留数据卷）
 ```
 
-> 国内拉不动官方基础镜像时加 `--build-arg JRE_IMAGE=docker.m.daocloud.io/library/eclipse-temurin:17-jre-jammy`。
+> 国内拉不动官方基础镜像时加 `--build-arg JRE_IMAGE=docker.m.daocloud.io/library/eclipse-temurin:17-jre-jammy`；
+> `node`/`maven` 基础镜像同样被挡时，再加 `--build-arg NODE_IMAGE=... --build-arg MAVEN_IMAGE=...`。
+
+> **ip2region 离线库**：登录日志与操作日志的「来源」列要显示 IP 归属地，依赖
+> `ip2region` 的 xdb 数据文件（`ip2region_v4.xdb` 约 11MB、`ip2region_v6.xdb` 约 18MB）。
+> 文件放在 `scaffold-system/scaffold-framework/src/main/resources/ip2region/`，
+> 随 jar 一起打包，无需联网。**未下载时应用照常启动**，归属地回落为「内网/未知」，
+> 不影响登录与业务功能。
 
 ### 版本号怎么管
 
