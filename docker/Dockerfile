@@ -1,8 +1,10 @@
 # ============================================================
 # 龙骨中台 · 单镜像（前端 + 后端打在一起）
 #
-#   构建：docker build -f docker/Dockerfile -t keel/keel-admin:1.0.0 .
-#   运行：docker run -d -p 8080:8080 -e JWT_SECRET=... -e DB_HOST=... keel/keel-admin:1.0.0
+#   构建：docker build -f docker/Dockerfile -t keel/keel-admin:1.1.0 --build-arg KEEL_VERSION=1.1.0 .
+#   运行：docker run -d -p 8080:8080 -e JWT_SECRET=... -e DB_HOST=... keel/keel-admin:1.1.0
+#
+# 版本号以项目根 VERSION 文件为唯一来源：前端界面、后端 /api/health 与镜像 tag 三处同源。
 #
 # 镜像里只有一个进程：Spring Boot。前端静态文件由后端托管（APP_STATIC_DIR），
 # 所以不需要 Nginx，也没有多进程守护。
@@ -23,6 +25,9 @@ COPY scaffold-vue/package.json scaffold-vue/package-lock.json ./
 RUN npm ci --registry=https://registry.npmmirror.com --no-audit --no-fund
 
 COPY scaffold-vue ./
+# 单一版本源：vite.config.ts 从 /VERSION 读取版本号注入前端。
+# 注意 COPY 的目标路径相对 WORKDIR（/web），这里用绝对路径 /VERSION，前端才能读到。
+COPY VERSION /VERSION
 # 接口地址用相对路径 /api，与后端同源，不需要配置后端域名
 RUN npm run build
 
@@ -46,6 +51,9 @@ RUN --mount=type=cache,target=/root/.m2/repository \
         dependency:go-offline || true
 
 COPY scaffold-system scaffold-system
+# 单一版本源：VERSION 放在项目根，需一并拷贝（目标相对 WORKDIR /src，即 /src/VERSION），
+# scaffold-admin 的 pom 会把它打进 classpath:/keel/VERSION
+COPY VERSION VERSION
 
 RUN --mount=type=cache,target=/root/.m2/repository \
     mvn -B -f scaffold-system/pom.xml -pl scaffold-admin -am -DskipTests package
@@ -53,8 +61,12 @@ RUN --mount=type=cache,target=/root/.m2/repository \
 # ---------- ③ 运行 ----------
 FROM ${JRE_IMAGE} AS runtime
 
+# 应用版本号：与项目根 VERSION 文件同源，构建时用 --build-arg KEEL_VERSION=1.1.0 传入
+ARG KEEL_VERSION=dev
+
 LABEL org.opencontainers.image.title="keel-admin" \
-      org.opencontainers.image.description="龙骨中台管理系统（前端 + 后端单镜像）"
+      org.opencontainers.image.description="龙骨中台管理系统（前端 + 后端单镜像）" \
+      org.opencontainers.image.version="${KEEL_VERSION}"
 
 # curl 供 HEALTHCHECK 用；tzdata 保证时区；非 root 运行
 RUN apt-get update \

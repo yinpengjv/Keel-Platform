@@ -2,6 +2,7 @@ package com.scaffold.system.service;
 
 import com.scaffold.common.exception.BusinessException;
 import com.scaffold.framework.security.JwtService;
+import com.scaffold.framework.security.LoginChallengeService;
 import com.scaffold.framework.security.TokenStore;
 import com.scaffold.system.domain.AuthUserRow;
 import com.scaffold.system.domain.MenuRow;
@@ -31,19 +32,27 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final TokenStore tokenStore;
+    private final LoginChallengeService loginChallenge;
 
-    public AuthService(AuthMapper authMapper, PasswordEncoder passwordEncoder, JwtService jwtService, TokenStore tokenStore) {
+    public AuthService(AuthMapper authMapper, PasswordEncoder passwordEncoder, JwtService jwtService,
+                       TokenStore tokenStore, LoginChallengeService loginChallenge) {
         this.authMapper = authMapper;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.tokenStore = tokenStore;
+        this.loginChallenge = loginChallenge;
     }
 
     public LoginResponse login(LoginRequest request) {
         AuthUserRow user = authMapper.selectUserByUsername(request.getUsername());
         if (user == null || !passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             authMapper.insertLoginLog(request.getUsername(), 0, "账号或密码错误");
-            throw new BusinessException("账号或密码错误");
+            // 提示锁定阈值，让用户知道再试错几次会被锁；文案对存在与不存在的账号完全一致，不泄露账号是否存在
+            int maxFailures = loginChallenge.maxFailures();
+            String message = maxFailures > 0
+                    ? "账号或密码错误，连续失败 " + maxFailures + " 次将锁定 " + loginChallenge.lockMinutes() + " 分钟"
+                    : "账号或密码错误";
+            throw new BusinessException(message);
         }
         if (user.getStatus() == null || user.getStatus() != 1) {
             authMapper.insertLoginLog(request.getUsername(), 0, "账号已停用");

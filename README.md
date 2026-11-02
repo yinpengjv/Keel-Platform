@@ -187,10 +187,39 @@ npm run dev
 ### 或者：一条命令起全套（推荐）
 
 ```bash
-docker build -f docker/Dockerfile -t keel/keel-admin:1.0.0 .
+docker build -f docker/Dockerfile -t keel/keel-admin:1.1.0 \
+  --build-arg KEEL_VERSION=1.1.0 \
+  --build-arg JRE_IMAGE=docker.m.daocloud.io/library/eclipse-temurin:17-jre-jammy .
 
 docker compose up -d      # 起 MySQL + 后端；停止用 docker compose down（保留数据卷）
 ```
+
+> 国内拉不动官方基础镜像时加 `--build-arg JRE_IMAGE=docker.m.daocloud.io/library/eclipse-temurin:17-jre-jammy`。
+
+### 版本号怎么管
+
+项目根的 **`VERSION` 文件是唯一版本源**，以下三处都以它为准，改一处即可，不会漂移：
+
+| 位置 | 表现 |
+| --- | --- |
+| `VERSION` | 形如 `1.1.0`，唯一事实来源 |
+| 前端界面 | 左下角 / 登录页显示的版本号（构建时由 Vite 注入） |
+| 后端 `/api/health` | 回显 `version`，可用来确认跑的是哪个版本 |
+| 镜像 tag | `keel/keel-admin:1.1.0`，同时写入 OCI label |
+
+升版用脚本递增，它会同步更新 `VERSION` 与 `.env` 里的镜像 tag：
+
+```bash
+# Windows
+powershell -ExecutionPolicy Bypass -File scripts\bump-version.ps1            # 1.1.0 → 1.1.1
+powershell -ExecutionPolicy Bypass -File scripts\bump-version.ps1 -Part minor # 1.1.0 → 1.2.0
+# Linux / macOS
+./scripts/bump-version.sh minor
+```
+
+升版后重建镜像与容器，前端界面、`/api/health` 与镜像 tag 三处会一起变成新版本。
+
+`docker-compose.yml` 从同目录 `.env` 读取 `KEEL_IMAGE`、`DB_PASSWORD` 等变量（`.env` 不入库，模板见 `.env.example`）。
 
 `docker-compose.yml` 含两个服务：
 

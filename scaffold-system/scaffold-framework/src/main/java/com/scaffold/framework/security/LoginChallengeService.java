@@ -166,6 +166,11 @@ public class LoginChallengeService {
         return dynamicConfig.intOf("sys.security.lockMinutes", lockMinutesDefault);
     }
 
+    /** 失败锁定阈值（次）；≤0 表示功能关闭。用于向用户提示「连续失败 N 次将锁定 M 分钟」 */
+    public int maxFailures() {
+        return dynamicConfig.intOf("sys.security.maxLoginFailures", maxFailuresDefault);
+    }
+
     /** 账号大小写不敏感；空账号不记录，避免匿名请求互相影响 */
     private String keyOf(String prefix, String username) {
         String trimmed = username == null ? "" : username.trim();

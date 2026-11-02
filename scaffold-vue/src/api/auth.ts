@@ -16,6 +16,10 @@ export interface CaptchaResponse {
 export interface LoginChallengeResponse {
   captchaRequired: boolean
   windowSeconds: number
+  /** 连续失败多少次将锁定账号（0 或未返回表示未启用） */
+  maxFailures: number
+  /** 锁定时长（分钟） */
+  lockMinutes: number
 }
 
 export interface LoginResponse {

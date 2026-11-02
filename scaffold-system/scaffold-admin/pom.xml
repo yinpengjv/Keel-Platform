@@ -46,6 +46,20 @@
     </dependencies>
 
     <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <!-- 单一版本源：把项目根的 VERSION 文件打进 classpath（classpath:/keel/VERSION），
+                 供 /api/health 回显应用版本，与前端界面、镜像 tag 同源。 -->
+            <resource>
+                <directory>${project.basedir}/../..</directory>
+                <includes>
+                    <include>VERSION</include>
+                </includes>
+                <targetPath>keel</targetPath>
+            </resource>
+        </resources>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>

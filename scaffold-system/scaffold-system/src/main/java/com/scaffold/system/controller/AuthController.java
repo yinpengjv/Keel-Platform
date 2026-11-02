@@ -61,6 +61,9 @@ public class AuthController {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("captchaRequired", loginChallenge.isRequired(username));
         result.put("windowSeconds", loginChallenge.windowSeconds());
+        // 锁定策略是全局配置，与具体账号无关，返回给前端用于提示用户，不泄露账号是否存在
+        result.put("maxFailures", loginChallenge.maxFailures());
+        result.put("lockMinutes", loginChallenge.lockMinutes());
         return R.success(result);
     }
 

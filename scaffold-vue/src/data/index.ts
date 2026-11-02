@@ -6,7 +6,7 @@ export const APP = Object.freeze({
   name: '龙骨中台管理系统',
   shortName: '龙骨中台',
   subtitle: 'Keel Platform',
-  version: 'v1.0.0',
+  version: __APP_VERSION__,
   copyright: `© ${new Date().getFullYear()} 龙骨中台管理系统`,
 })
 

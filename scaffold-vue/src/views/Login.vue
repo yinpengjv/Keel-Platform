@@ -26,6 +26,13 @@ const captchaUuid = ref('')
 const captchaLoading = ref(false)
 /** 是否展示验证码：首次登录为 false，登录失败后由后端开启窗口期才变为 true */
 const captchaRequired = ref(false)
+/** 登录失败锁定策略：连续失败 maxFailures 次将锁定 lockMinutes 分钟（全局配置，与具体账号无关） */
+const lockPolicy = ref({ maxFailures: 0, lockMinutes: 0 })
+/** 登录前就告知规则，避免用户反复试错被锁却不知原因 */
+const lockHint = computed(() => {
+  const { maxFailures, lockMinutes } = lockPolicy.value
+  return maxFailures > 0 ? `连续失败 ${maxFailures} 次将锁定 ${lockMinutes} 分钟` : ''
+})
 const root = ref<HTMLElement | null>(null)
 const card = ref<HTMLElement | null>(null)
 const succeeded = ref(false)
@@ -122,6 +129,10 @@ async function checkChallenge(username: string, force = false) {
   if (!name) return
   try {
     const res = await authApi.loginChallenge(name)
+    lockPolicy.value = {
+      maxFailures: res.maxFailures ?? 0,
+      lockMinutes: res.lockMinutes ?? 0,
+    }
     const turnedOn = res.captchaRequired && !captchaRequired.value
     captchaRequired.value = res.captchaRequired
     if (res.captchaRequired) {
@@ -139,6 +150,19 @@ async function checkChallenge(username: string, force = false) {
 
 function onUsernameBlur() {
   void checkChallenge(form.username)
+}
+
+/** 页面初次进入即取回锁定规则（不传账号也能拿到全局阈值），用于密码框下方提示 */
+async function loadLockPolicy() {
+  try {
+    const res = await authApi.loginChallenge('')
+    lockPolicy.value = {
+      maxFailures: res.maxFailures ?? 0,
+      lockMinutes: res.lockMinutes ?? 0,
+    }
+  } catch {
+    // 取不到就不显示提示，不影响登录
+  }
 }
 
 async function submit() {
@@ -213,6 +237,7 @@ function onVisibility() {
 
 onMounted(() => {
   probeHealth()
+  void loadLockPolicy()
   clockTimer = window.setInterval(() => { if (!document.hidden) now.value = new Date() }, 1000)
   if (card.value && window.matchMedia('(hover: hover)').matches) {
     tiltX = gsap.quickTo(card.value, 'rotationX', { duration: 0.6, ease: 'power3.out' })
@@ -308,7 +333,7 @@ onBeforeUnmount(() => {
             <Field label="账号" :error="errors.username">
               <TextInput v-model="form.username" icon="user" placeholder="请输入账号" autocomplete="username" :invalid="!!errors.username" @blur="onUsernameBlur" />
             </Field>
-            <Field label="密码" :error="errors.password">
+            <Field label="密码" :error="errors.password" :hint="lockHint">
               <TextInput v-model="form.password" type="password" icon="lock" placeholder="请输入密码" autocomplete="current-password" revealable :invalid="!!errors.password" />
             </Field>
             <Field
