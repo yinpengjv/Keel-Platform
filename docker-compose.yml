@@ -1,0 +1,61 @@
+# ============================================================
+# 龙骨中台 · 一键启动全套（MySQL + 后端）
+#
+#   启动：  docker compose up -d
+#   停止：  docker compose down          （保留数据卷）
+#   彻底清：docker compose down -v       （连数据卷一起删，慎用）
+#
+# 数据库用**具名卷** mysql-data 持久化，容器删了数据还在；
+# 重建容器会自动挂回同一个卷，不再出现"重建后数据没了"。
+#
+# 后端通过容器名 mysql 直连（同网络内 DNS 解析），不绕宿主机端口。
+# ============================================================
+
+services:
+  mysql:
+    image: mysql:latest
+    container_name: mysql
+    restart: unless-stopped
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-admin}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - keel-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${DB_PASSWORD:-admin}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+  keel-admin:
+    image: ${KEEL_IMAGE:-keel/keel-admin:1.0.0}
+    container_name: keel
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "${KEEL_PORT:-8080}:8080"
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-scaffold_system}
+      DB_USERNAME: ${DB_USERNAME:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-admin}
+      JWT_SECRET: ${JWT_SECRET:-docker-smoke-test-secret-0123456789abcdef}
+      TZ: ${TZ:-Asia/Shanghai}
+    networks:
+      - keel-net
+
+networks:
+  keel-net:
+    external: true
+    name: keel-net
+
+volumes:
+  mysql-data:
+    name: mysql-data

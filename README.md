@@ -184,11 +184,39 @@ npm run dev
 
 种子管理员 `admin` / `admin123`，仅用于本地开发。超级管理员可见全部已注册菜单并拥有全部操作权限；其余种子角色默认未授予菜单，需在角色管理中分配，未分配时登录会显示「暂未分配可用菜单」。
 
-### 或者：一条命令起容器
+### 或者：一条命令起全套（推荐）
 
 ```bash
 docker build -f docker/Dockerfile -t keel/keel-admin:1.0.0 .
 
+docker compose up -d      # 起 MySQL + 后端；停止用 docker compose down（保留数据卷）
+```
+
+`docker-compose.yml` 含两个服务：
+
+- **mysql** —— MySQL 官方镜像，数据落在**具名卷** `mysql-data`；容器删了再重建会自动挂回同一份数据，不会再出现「重建后数据没了」。`restart: unless-stopped` 让它随 Docker 开机自启。
+- **keel-admin** —— 应用镜像，`DB_HOST=mysql` 用容器名直连，靠 `depends_on: service_healthy` 等数据库真正就绪后再启动。
+
+首次使用需先建一次网络并灌入建表脚本：
+
+```bash
+docker network create keel-net
+docker compose up -d mysql
+for f in scaffold-system/sql/V*.sql; do
+  docker exec -i mysql mysql -uroot -padmin --default-character-set=utf8mb4 scaffold_system < "$f"
+done
+docker compose up -d
+```
+
+Windows 下更省事：直接跑 `scripts\start-docker.ps1`，它会自动建网络、接数据库、起服务并等待健康检查通过。
+
+镜像内只有一个进程（Spring Boot）。前端静态资源由后端托管，`/` 直接出页面，深链接刷新回落 `index.html`，`/api/**` 的 404 仍是 404 而不会被吞成 HTML。
+
+> ⚠️ 容器之间用容器名通信**必须**建自定义网络。Docker 默认 `bridge` 网络只支持 IP 直连，用容器名会报 `UnknownHostException: mysql`；走宿主机端口映射（`host.docker.internal`）则不受此限制。
+
+数据库已在别处时，单独跑应用镜像：
+
+```bash
 docker run -d --name keel -p 8080:8080 \
   -e JWT_SECRET="$(openssl rand -hex 32)" \
   -e DB_HOST=host.docker.internal -e DB_PORT=3306 \
@@ -197,7 +225,7 @@ docker run -d --name keel -p 8080:8080 \
   keel/keel-admin:1.0.0
 ```
 
-镜像内只有一个进程（Spring Boot）。前端静态资源由后端托管，`/` 直接出页面，深链接刷新回落 `index.html`，`/api/**` 的 404 仍是 404 而不会被吞成 HTML。Linux 上把 `DB_HOST` 换成宿主机实际 IP 或数据库容器名。
+Linux 上把 `DB_HOST` 换成宿主机实际 IP 或数据库容器名。
 
 容器日志里能看到两类业务日志，靠 traceId 关联同一个请求：
 

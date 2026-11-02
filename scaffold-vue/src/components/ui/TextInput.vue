@@ -30,9 +30,44 @@ const emit = defineEmits<{
 
 const el = ref<HTMLInputElement | HTMLTextAreaElement | null>(null)
 
+/**
+ * 密码框掩码策略。
+ *
+ * 原生 type="password" 在 Edge / Chrome 上会自带一个「自动填充 / 显示密码」原生图标，
+ * 它由浏览器直接绘制在输入框内部，**不属于 DOM**，因此既查不到也删不掉。
+ * 当用户清空密码框后重新输入时它就会出现，正好紧挨右侧自定义的「显示密码」眼睛按钮，
+ * 视觉上表现为「两个眼睛」。
+ *
+ * 所以在支持 text-security 的浏览器上改用 type="text" + CSS 掩码，让浏览器不再绘制原生 UI：
+ *   - Chromium / WebKit：-webkit-text-security: disc
+ *   - Firefox（新版）  ：text-security: disc
+ * 不支持时回退原生 type="password"（这些浏览器没有上述原生图标，不会撞车）。
+ */
+const maskMode = (() => {
+  if (typeof CSS === 'undefined' || typeof CSS.supports !== 'function') return 'none'
+  if (CSS.supports('-webkit-text-security', 'disc')) return 'webkit'
+  if (CSS.supports('text-security', 'disc')) return 'standard'
+  return 'none'
+})()
+
 /** 眼睛按钮控制的明文状态：仅在 type=password 且开启 revealable 时生效 */
 const revealed = ref(false)
-const inputType = computed(() => (props.type === 'password' && revealed.value ? 'text' : props.type))
+const isPassword = computed(() => props.type === 'password')
+/** 是否由 CSS 承担掩码（浏览器支持 text-security） */
+const cssMasked = computed(() => isPassword.value && maskMode !== 'none')
+
+const inputType = computed(() => {
+  if (!isPassword.value) return props.type
+  if (cssMasked.value) return 'text' // 掩码交给 CSS，输入框类型保持 text
+  return revealed.value ? 'text' : 'password'
+})
+
+/** 掩码样式：点开眼睛时取消掩码显示明文 */
+const maskStyle = computed(() => {
+  if (!cssMasked.value) return undefined
+  const value = revealed.value ? 'none' : 'disc'
+  return maskMode === 'webkit' ? `-webkit-text-security: ${value};` : `text-security: ${value};`
+})
 
 function onInput(event: Event) {
   const raw = (event.target as HTMLInputElement).value
@@ -69,6 +104,7 @@ defineExpose({ focus: () => el.value?.focus() })
       ref="el"
       :type="inputType"
       :value="modelValue ?? ''"
+      :style="maskStyle"
       :placeholder="placeholder"
       :disabled="disabled"
       :readonly="readonly"
