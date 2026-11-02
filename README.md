@@ -249,6 +249,18 @@ powershell -ExecutionPolicy Bypass -File scripts\bump-version.ps1 -Part minor # 
 
 升版后重建镜像与容器，前端界面、`/api/health` 与镜像 tag 三处会一起变成新版本。
 
+> **构建残留怎么清**：每重建一次镜像，旧的同名 tag 会失去引用变成 `<none>`（悬空镜像），
+> 同时 BuildKit 会累积构建缓存。定期跑一条命令即可：
+>
+> ```bash
+> ./scripts/clean-docker.sh              # 清悬空镜像 + 构建缓存保留 1GB（推荐）
+> ./scripts/clean-docker.sh --all        # 连缓存一起清，下次构建会变慢
+> ./scripts/clean-docker.sh --dry-run    # 只看不删
+> ```
+> Windows：`powershell -ExecutionPolicy Bypass -File scripts\clean-docker.ps1`
+>
+> 脚本只删悬空镜像与缓存，**不碰运行中的容器、具名卷 `mysql-data` 和带 tag 的镜像**。
+
 `docker-compose.yml` 从同目录 `.env` 读取 `KEEL_IMAGE`、`DB_PASSWORD` 等变量（`.env` 不入库，模板见 `.env.example`）。
 
 `docker-compose.yml` 含两个服务：
